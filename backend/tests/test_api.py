@@ -51,6 +51,12 @@ def test_requires_valid_session(client):
     assert client.get("/api/v1/dashboard").status_code == 401
 
 
+def test_error_language_defaults_to_english_and_supports_german(client):
+    headers={"Authorization":"Bearer missing"}
+    assert client.get("/api/v1/session",headers=headers).json()["detail"] == "Please sign in"
+    assert client.get("/api/v1/session",headers={**headers,"Accept-Language":"de"}).json()["detail"] == "Bitte anmelden"
+
+
 def test_crud_and_version_conflict(client):
     created = client.post("/api/v1/items/tasks", json={"title": "Planen"})
     assert created.status_code == 201

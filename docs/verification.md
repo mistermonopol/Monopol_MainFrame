@@ -2,14 +2,14 @@
 
 Lokal erfolgreich ausgeführt:
 
-- **14 API-Tests**, mit getrennten SQLite-Datenbanken: Passwort-Anmeldung für Web und Android, sichere Cookies, Logout, gemeinsame Begrenzung falscher Anmeldeversuche, ungültige frühere Sitzungen, entfernte Login-Endpunkte, Origin-Prüfung, CRUD für alle drei Module, Versionskonflikte, Gesundheitsimporte und Gewichtsmesszeitpunkt.
-- **10 Playwright-Browserprüfungen**, Desktop und Pixel-Viewport: Passwort-Anmeldung, Aufgaben, Offline-Cache, leere Gesundheitswerte, unverbundene Dienste sowie einklappbare Navigation mit gespeicherter Einstellung und mobiles Seitenmenü einschließlich Escape und Fokus-Rückgabe. API-Antworten werden gezielt simuliert.
+- **15 API-Tests**, mit getrennten SQLite-Datenbanken: Passwort-Anmeldung, sichere Cookies, Logout, Begrenzung falscher Anmeldeversuche, frühere Sitzungen, Origin-Prüfung, CRUD, Versionskonflikte, Gesundheitsimporte und Fehlermeldungen auf Englisch bzw. Deutsch.
+- **20 Playwright-Prüfungen**, Desktop und Pixel-Viewport: bisherige Abläufe, Navigation, Sprach- und Themewechsel mit gespeicherter Auswahl, eckige Bedienelemente, alle Diagrammansichten sowie Aggregationsfälle für fehlende Werte, gemessene Nullen, doppelte Tage und Wochen-/Jahresgrenzen. API-Antworten werden gezielt simuliert; sechs Prüfläufe testen die reine Aggregation.
 - **Next.js-Produktionsbuild** mit TypeScript-Prüfung.
-- **Android Debug-APK** erfolgreich kompiliert und paketiert; **2 Kotlin-Unit-Tests** für Schlafintervallüberschneidungen und Berliner Sommerzeitgrenze erfolgreich.
+- **Android Debug-APK** erfolgreich kompiliert und paketiert; **6 Kotlin-Unit-Tests** für Schlafintervalle, Sommerzeit, Schritt-Aggregation und Übersetzungen erfolgreich.
 - **Docker-Compose-Konfiguration** gegen `.env.example` validiert.
 - **Coolify-Konfiguration**: explizite Umgebungsvariablen, eingebautes PostgreSQL-Init, Migration vor API-Start und HTTPS-Zugriff über Coolifys Proxy auf den internen Web-Port 3000. CI prüft Web → API → PostgreSQL ohne veröffentlichte Host-Ports; Ausführungsstatus siehe GitHub Actions.
 - **npm audit** und **pip-audit** ohne bekannte Sicherheitslücken im geprüften Paketbestand.
-- Dunkle Lila-Oberfläche mit Consolas/Monospace: Desktop, eingeklappte Seitenleiste, Mobilansicht und geöffnetes mobiles Menü anhand erzeugter Web-Screenshots visuell geprüft. Keine externen Webfonts erforderlich. Android verwendet Monospace-Typografie und adaptive seitliche Navigation; die native Darstellung muss zusätzlich auf dem Pixel geprüft werden.
+- Dark und Light Mode mit Consolas/Monospace und rechteckigen Ecken: englische Desktop-Ansichten, Settings und deutsche Mobilansicht einschließlich Diagramm anhand von Web-Screenshots visuell geprüft. Keine externen Webfonts erforderlich. Die native Darstellung beider Themes muss zusätzlich auf dem Pixel geprüft werden.
 
 Die Test-APK liegt nach dem Build unter `android/app/build/outputs/apk/debug/app-debug.apk`. Sie ist mit einem Entwicklungsschlüssel signiert und dient Gerätetests; für dauerhaften privaten Betrieb einen eigenen gesicherten Release-Keystore verwenden.
 

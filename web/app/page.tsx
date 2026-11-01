@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { Language, Theme, localeFor, translator, slogan } from "./i18n";
+import StepChart from "./StepChart";
 import {
   LayoutDashboard,
   CheckSquare,
@@ -9,8 +11,8 @@ import {
   Settings,
   ArrowUpRight,
   Plus,
-  Circle,
-  CheckCircle2,
+  Square,
+  CheckSquare2,
   RefreshCw,
   LogOut,
   Layers3,
@@ -57,31 +59,57 @@ const empty: Data = {
   events: [],
   health: { days: [], last_sync: null },
 };
-const navigation = [
-  ["dashboard", "Übersicht", LayoutDashboard],
-  ["tasks", "Aufgaben", CheckSquare],
-  ["notes", "Notizen", NotebookPen],
-  ["events", "Kalender", CalendarDays],
-  ["health", "Gesundheit", HeartPulse],
-  ["settings", "Einstellungen", Settings],
-] as const;
-const labels: Record<Kind, string> = {
-  tasks: "Aufgabe",
-  notes: "Notiz",
-  events: "Termin",
-};
-const fmt = (value: number | null | undefined) =>
-  value == null
-    ? "—"
-    : new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(
-        value,
-      );
-const dateText = (s: string) =>
-  new Date(s).toLocaleString("de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 export default function Home() {
+  const [language, setLanguage] = useState<Language>("en");
+  const [theme, setTheme] = useState<Theme>("dark");
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const t = translator(language);
+  const locale = localeFor(language);
+  const navigation = [
+    ["dashboard", t("Übersicht"), LayoutDashboard],
+    ["tasks", t("Aufgaben"), CheckSquare],
+    ["notes", t("Notizen"), NotebookPen],
+    ["events", t("Kalender"), CalendarDays],
+    ["health", t("Gesundheit"), HeartPulse],
+    ["settings", t("Einstellungen"), Settings],
+  ] as const;
+  const labels: Record<Kind, string> = {
+    tasks: t("Aufgabe"),
+    notes: t("Notiz"),
+    events: t("Termin"),
+  };
+  const fmt = (value: number | null | undefined) =>
+    value == null
+      ? "—"
+      : new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(
+          value,
+        );
+  const dateText = (s: string) =>
+    new Date(s).toLocaleString(locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+  useEffect(() => {
+    try {
+      setLanguage(
+        localStorage.getItem("monopol-language") === "de" ? "de" : "en",
+      );
+      setTheme(
+        localStorage.getItem("monopol-theme") === "light" ? "light" : "dark",
+      );
+    } catch {}
+    setPreferencesReady(true);
+  }, []);
+  useEffect(() => {
+    if (!preferencesReady) return;
+    document.documentElement.lang = language;
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("monopol-language", language);
+      localStorage.setItem("monopol-theme", theme);
+    } catch {}
+  }, [language, theme, preferencesReady]);
   const [page, setPage] = useState("dashboard"),
     [data, setData] = useState<Data>(empty),
     [online, setOnline] = useState(true),
@@ -164,21 +192,25 @@ export default function Home() {
   async function request(path: string, init?: RequestInit) {
     const r = await fetch("/api/v1" + path, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept-Language": language,
+        ...init?.headers,
+      },
     });
     if (r.status === 401) {
       setAuth(false);
       const body = await r.json().catch(() => ({}));
       throw Error(
-        typeof body.detail === "string" ? body.detail : "Bitte anmelden.",
+        typeof body.detail === "string" ? t(body.detail) : t("Bitte anmelden."),
       );
     }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw Error(
         typeof body.detail === "string"
-          ? body.detail
-          : "Die Anfrage konnte nicht gespeichert werden.",
+          ? t(body.detail)
+          : t("Die Anfrage konnte nicht gespeichert werden."),
       );
     }
     return r.json();
@@ -248,34 +280,38 @@ export default function Home() {
       (a, b) => new Date(a.start!).getTime() - new Date(b.start!).getTime(),
     );
   const enabled = online && auth;
-  function taskRow(t: Item) {
+  function taskRow(task: Item) {
     return (
-      <div className="task" key={t.id}>
+      <div className="task" key={task.id}>
         <button
-          aria-label={t.completed ? "Als offen markieren" : "Erledigen"}
+          aria-label={
+            task.completed ? t("Als offen markieren") : t("Erledigen")
+          }
           disabled={!enabled}
           className="check"
           onClick={() =>
-            void mutate("/items/tasks/" + t.id, "PUT", {
-              ...t,
-              completed: !t.completed,
+            void mutate("/items/tasks/" + task.id, "PUT", {
+              ...task,
+              completed: !task.completed,
             })
           }
         >
-          {t.completed ? <CheckCircle2 size={21} /> : <Circle size={21} />}
+          {task.completed ? <CheckSquare2 size={21} /> : <Square size={21} />}
         </button>
         <button
-          className={"tasktext " + (t.completed ? "done" : "")}
-          onClick={() => setEditor({ kind: "tasks", item: t })}
+          className={"tasktext " + (task.completed ? "done" : "")}
+          onClick={() => setEditor({ kind: "tasks", item: task })}
         >
-          {t.title}
+          {task.title}
           <small>
-            {t.due
-              ? new Date(t.due + "T12:00:00").toLocaleDateString("de-DE")
-              : "Ohne Fälligkeit"}
+            {task.due
+              ? new Date(task.due + "T12:00:00").toLocaleDateString(locale)
+              : t("Ohne Fälligkeit")}
           </small>
         </button>
-        <span className="tag">{t.completed ? "Erledigt" : "Offen"}</span>
+        <span className="tag">
+          {task.completed ? t("Erledigt") : t("Offen")}
+        </span>
       </div>
     );
   }
@@ -286,14 +322,14 @@ export default function Home() {
       {mobileMenuOpen && (
         <button
           className="sidebar-scrim"
-          aria-label="Menü schließen"
+          aria-label={t("Menü schließen")}
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
       <aside
         id="sidebar"
         ref={sidebarRef}
-        aria-label="Seitennavigation"
+        aria-label={t("Seitennavigation")}
         role={mobileMenuOpen ? "dialog" : undefined}
         aria-modal={mobileMenuOpen || undefined}
       >
@@ -301,7 +337,7 @@ export default function Home() {
           <a
             className="brand"
             href="/"
-            aria-label="Monopol_MainFrame Startseite"
+            aria-label={t("Monopol_MainFrame Startseite")}
             title="Monopol_MainFrame"
           >
             <span className="brandicon">
@@ -315,16 +351,16 @@ export default function Home() {
             className="sidebar-toggle"
             aria-label={
               sidebarCollapsed
-                ? "Seitenleiste ausklappen"
-                : "Seitenleiste einklappen"
+                ? t("Seitenleiste ausklappen")
+                : t("Seitenleiste einklappen")
             }
             aria-expanded={!sidebarCollapsed}
             aria-controls="sidebar"
             onClick={toggleSidebar}
             title={
               sidebarCollapsed
-                ? "Seitenleiste ausklappen"
-                : "Seitenleiste einklappen"
+                ? t("Seitenleiste ausklappen")
+                : t("Seitenleiste einklappen")
             }
           >
             {sidebarCollapsed ? (
@@ -335,14 +371,14 @@ export default function Home() {
           </button>
           <button
             className="mobile-nav-close"
-            aria-label="Navigation schließen"
+            aria-label={t("Navigation schließen")}
             onClick={() => setMobileMenuOpen(false)}
           >
             <X size={20} />
           </button>
         </div>
-        <div className="workspace">PERSÖNLICHER WORKSPACE</div>
-        <nav aria-label="Hauptnavigation">
+        <div className="workspace">{t("PERSÖNLICHER WORKSPACE")}</div>
+        <nav aria-label={t("Hauptnavigation")}>
           {navigation.map(([id, label, Icon]) => (
             <button
               key={id}
@@ -368,14 +404,14 @@ export default function Home() {
         <div className="sidebar-bottom">
           <div className="private">
             <span className="statusdot" />
-            Dein privater Raum
-            <small>Alles an einem Ort. Unter deiner Kontrolle.</small>
+            {t("Dein privater Raum")}
+            <small>{t("Alles an einem Ort. Unter deiner Kontrolle.")}</small>
           </div>
           <div className="profile">
             <div className="avatar">M</div>
             <div>
               <span className="profile-label">
-                Monopol<small>Persönlicher Workspace</small>
+                Monopol<small>{t("Persönlicher Workspace")}</small>
               </span>
             </div>
           </div>
@@ -387,7 +423,7 @@ export default function Home() {
             <button
               ref={menuButtonRef}
               className="mobile-menu"
-              aria-label="Navigation öffnen"
+              aria-label={t("Navigation öffnen")}
               aria-expanded={mobileMenuOpen}
               aria-controls="sidebar"
               onClick={() => setMobileMenuOpen(true)}
@@ -403,10 +439,10 @@ export default function Home() {
           <div className="headeractions">
             <span className="connection">
               <i className={online ? "statusdot" : "statusdot amber"} />
-              {online ? "Server verbunden" : "Offline / Anmeldung nötig"}
+              {online ? t("Server verbunden") : t("Offline / Anmeldung nötig")}
             </span>
             <button
-              aria-label="Aktualisieren"
+              aria-label={t("Aktualisieren")}
               onClick={() => void load()}
               disabled={busy}
             >
@@ -417,22 +453,22 @@ export default function Home() {
         <div className="content">
           <div className="pageheading">
             <div>
-              <div className="eyebrow">DEIN PERSÖNLICHER WORKSPACE</div>
+              <div className="eyebrow">{t("DEIN PERSÖNLICHER WORKSPACE")}</div>
               <h1>
                 {page === "dashboard"
-                  ? "Willkommen im MainFrame."
+                  ? t("Willkommen im MainFrame.")
                   : navigation.find((n) => n[0] === page)?.[1]}
               </h1>
               <p>
-                {new Date().toLocaleDateString("de-DE", {
+                {new Date().toLocaleDateString(locale, {
                   weekday: "long",
                   day: "numeric",
                   month: "long",
                   year: "numeric",
                   timeZone: "Europe/Berlin",
                 })}{" "}
-                <span className="divider">·</span> Mach Platz für das, was
-                zählt.
+                <span className="divider">·</span>
+                {t("Mach Platz für das, was zählt.")}
               </p>
             </div>
             <button
@@ -451,15 +487,15 @@ export default function Home() {
             >
               <Plus size={17} />{" "}
               {page === "notes"
-                ? "Neue Notiz"
+                ? t("Neue Notiz")
                 : page === "events"
-                  ? "Neuer Termin"
-                  : "Neue Aufgabe"}
+                  ? t("Neuer Termin")
+                  : t("Neue Aufgabe")}
             </button>
           </div>
           {error && (
             <div className="notice" role="alert">
-              {error}
+              {t(error)}
             </div>
           )}
           {!auth && (
@@ -483,10 +519,12 @@ export default function Home() {
               }}
             >
               <div>
-                <strong>Dein privater Workspace</strong>
-                <small>Melde dich mit deinem persönlichen Passwort an.</small>
+                <strong>{t("Dein privater Workspace")}</strong>
+                <small>
+                  {t("Melde dich mit deinem persönlichen Passwort an.")}
+                </small>
               </div>
-              <label htmlFor="login-password">Passwort</label>
+              <label htmlFor="login-password">{t("Passwort")}</label>
               <input
                 id="login-password"
                 type="password"
@@ -498,13 +536,13 @@ export default function Home() {
                 onChange={(event) => setPassword(event.target.value)}
               />
               <button className="primary" disabled={signingIn}>
-                {signingIn ? "Anmelden …" : "Anmelden"}
+                {signingIn ? t("Anmelden …") : t("Anmelden")}
               </button>
             </form>
           )}
           {loaded && (
             <div className="sync">
-              Letzter geladener Stand: {dateText(loaded)}
+              {t("Letzter geladener Stand:")} {dateText(loaded)}
             </div>
           )}
           {page === "dashboard" && (
@@ -512,20 +550,21 @@ export default function Home() {
               <section className="hero">
                 <div>
                   <span className="pill">
-                    <span className="statusdot" /> DEIN PERSÖNLICHES LIFE OS
+                    <span className="statusdot" /> {slogan}
                   </span>
                   <h2>
-                    Weniger Tabs.
+                    {t("Weniger Tabs.")}
                     <br />
-                    <span>Mehr Überblick.</span>
+                    <span>{t("Mehr Überblick.")}</span>
                   </h2>
                   <p>
-                    Deine Aufgaben, Termine und Gesundheit.
+                    {t("Deine Aufgaben, Termine und Gesundheit.")}
                     <br />
-                    Ein ruhiger Ort für alles, was dich bewegt.
+                    {t("Ein ruhiger Ort für alles, was dich bewegt.")}
                   </p>
                   <button onClick={() => setPage("tasks")}>
-                    Meinen Tag planen <ArrowUpRight size={16} />
+                    {t("Meinen Tag planen")}
+                    <ArrowUpRight size={16} />
                   </button>
                 </div>
                 <div className="orbit">
@@ -548,36 +587,44 @@ export default function Home() {
                   </span>
                 </div>
               </section>
+              <StepChart days={data.health.days} language={language} />
               <div className="sectionlabel">
-                Heute auf einen Blick <span>DEIN TÄGLICHER PULS</span>
+                {t("Heute auf einen Blick")}{" "}
+                <span>{t("DEIN TÄGLICHER PULS")}</span>
               </div>
               <section className="stats">
                 {[
-                  [Footprints, "Schritte", fmt(today?.steps), "Heute", "mint"],
+                  [
+                    Footprints,
+                    t("Schritte"),
+                    fmt(today?.steps),
+                    t("Heute"),
+                    "mint",
+                  ],
                   [
                     Moon,
-                    "Schlaf",
+                    t("Schlaf"),
                     today?.sleep_minutes == null
                       ? "—"
                       : fmt(today.sleep_minutes / 60) + " h",
-                    "Letzte Nacht",
+                    t("Letzte Nacht"),
                     "purple",
                   ],
                   [
                     Activity,
-                    "Ruhepuls",
+                    t("Ruhepuls"),
                     fmt(today?.resting_pulse),
-                    "bpm · Tagesmittel",
+                    t("bpm · Tagesmittel"),
                     "peach",
                   ],
                   [
                     Weight,
-                    "Gewicht",
+                    t("Gewicht"),
                     fmt(
                       data.health.days.find((d) => d.weight_kg != null)
                         ?.weight_kg,
                     ),
-                    "kg · letzter Tageswert",
+                    t("kg · letzter Tageswert"),
                     "blue",
                   ],
                 ].map(([Icon, label, value, sub, color]) => {
@@ -602,13 +649,14 @@ export default function Home() {
                 <div className="card panel">
                   <div className="paneltitle">
                     <h3>
-                      <CheckSquare size={18} /> Meine Aufgaben{" "}
+                      <CheckSquare size={18} /> {t("Meine Aufgaben")}{" "}
                       <span className="count">
                         {data.tasks.filter((t) => !t.completed).length}
                       </span>
                     </h3>
                     <button onClick={() => setPage("tasks")}>
-                      Alle ansehen <ArrowUpRight size={14} />
+                      {t("Alle ansehen")}
+                      <ArrowUpRight size={14} />
                     </button>
                   </div>
                   {data.tasks.length ? (
@@ -616,12 +664,12 @@ export default function Home() {
                   ) : (
                     <div className="empty">
                       <CheckSquare />
-                      <p>Ein klarer Kopf beginnt mit einer Liste.</p>
+                      <p>{t("Ein klarer Kopf beginnt mit einer Liste.")}</p>
                       <button
                         disabled={!enabled}
                         onClick={() => setEditor({ kind: "tasks" })}
                       >
-                        Erste Aufgabe anlegen
+                        {t("Erste Aufgabe anlegen")}
                       </button>
                     </div>
                   )}
@@ -629,10 +677,12 @@ export default function Home() {
                 <div className="card panel">
                   <div className="paneltitle">
                     <h3>
-                      <CalendarDays size={18} /> Als Nächstes
+                      <CalendarDays size={18} />
+                      {t("Als Nächstes")}
                     </h3>
                     <button onClick={() => setPage("events")}>
-                      Kalender <ArrowUpRight size={14} />
+                      {t("Kalender")}
+                      <ArrowUpRight size={14} />
                     </button>
                   </div>
                   {upcoming.length ? (
@@ -645,7 +695,7 @@ export default function Home() {
                         <span className="eventdate">
                           {new Date(e.start!).getDate()}
                           <small>
-                            {new Date(e.start!).toLocaleDateString("de-DE", {
+                            {new Date(e.start!).toLocaleDateString(locale, {
                               month: "short",
                             })}
                           </small>
@@ -662,26 +712,27 @@ export default function Home() {
                   ) : (
                     <div className="empty">
                       <CalendarDays />
-                      <p>Raum für neue Pläne.</p>
-                      <span>Du hast keine anstehenden Termine.</span>
+                      <p>{t("Raum für neue Pläne.")}</p>
+                      <span>{t("Du hast keine anstehenden Termine.")}</span>
                     </div>
                   )}
                 </div>
               </section>
               <div className="sectionlabel">
-                Dein vernetztes Leben <span>WÄCHST MIT DIR</span>
+                {t("Dein vernetztes Leben")}
+                <span>{t("WÄCHST MIT DIR")}</span>
               </div>
               <section className="integrations">
                 {[
-                  ["€", "Finanzen", "Budget & Ausgaben"],
-                  ["⌂", "Smart Home", "Dein Zuhause im Blick"],
-                  ["♫", "Musik", "Releases & Projekte"],
+                  ["€", t("Finanzen"), t("Budget & Ausgaben")],
+                  ["⌂", "Smart Home", t("Dein Zuhause im Blick")],
+                  ["♫", t("Musik"), t("Releases & Projekte")],
                 ].map(([icon, title, sub]) => (
                   <div className="card integration" key={title}>
                     <span className="integrationicon">{icon}</span>
                     <h3>{title}</h3>
                     <p>{sub}</p>
-                    <span className="tag">Nicht verbunden</span>
+                    <span className="tag">{t("Nicht verbunden")}</span>
                   </div>
                 ))}
               </section>
@@ -692,7 +743,8 @@ export default function Home() {
               <div className="paneltitle">
                 <h3>{navigation.find((n) => n[0] === page)?.[1]}</h3>
                 <span className="tag">
-                  {data[page as Kind].length} Einträge
+                  {data[page as Kind].length}
+                  {t("Einträge")}
                 </span>
               </div>
               {data[page as Kind].length ? (
@@ -709,7 +761,7 @@ export default function Home() {
                       <p>
                         {page === "events"
                           ? dateText(i.start!) + " · " + i.location
-                          : i.description || "Keine Beschreibung"}
+                          : i.description || t("Keine Beschreibung")}
                       </p>
                     </button>
                   ),
@@ -717,8 +769,8 @@ export default function Home() {
               ) : (
                 <div className="empty">
                   <NotebookPen />
-                  <p>Noch keine Einträge.</p>
-                  <span>Lege oben deinen ersten Eintrag an.</span>
+                  <p>{t("Noch keine Einträge.")}</p>
+                  <span>{t("Lege oben deinen ersten Eintrag an.")}</span>
                 </div>
               )}
             </section>
@@ -730,25 +782,28 @@ export default function Home() {
                   <HeartPulse size={18} /> Health Connect
                 </h3>
                 <span className="tag">
-                  {data.health.last_sync ? "Synchronisiert" : "Nicht verbunden"}
+                  {data.health.last_sync
+                    ? t("Synchronisiert")
+                    : t("Nicht verbunden")}
                 </span>
               </div>
               <p className="muted">
-                Leseberechtigungen und Synchronisation verwaltest du in der
-                Android-App. Letzte Übertragung:{" "}
+                {t(
+                  "Leseberechtigungen und Synchronisation verwaltest du in der Android-App. Letzte Übertragung:",
+                )}{" "}
                 {data.health.last_sync
                   ? dateText(data.health.last_sync)
-                  : "Noch keine"}
+                  : t("Noch keine")}
               </p>
               <div className="tablewrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Tag</th>
-                      <th>Schritte</th>
-                      <th>Schlaf (h)</th>
-                      <th>Ruhepuls</th>
-                      <th>Gewicht (kg)</th>
+                      <th>{t("Tag")}</th>
+                      <th>{t("Schritte")}</th>
+                      <th>{t("Schlaf (h)")}</th>
+                      <th>{t("Ruhepuls")}</th>
+                      <th>{t("Gewicht (kg)")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -773,23 +828,53 @@ export default function Home() {
               {!data.health.days.length && (
                 <div className="empty">
                   <HeartPulse />
-                  <p>Noch keine Gesundheitsdaten.</p>
-                  <span>Verbinde Health Connect auf deinem Pixel.</span>
+                  <p>{t("Noch keine Gesundheitsdaten.")}</p>
+                  <span>{t("Verbinde Health Connect auf deinem Pixel.")}</span>
                 </div>
               )}
             </section>
           )}
           {page === "settings" && (
             <section className="card panel settings">
-              <h3>Dein privater Workspace</h3>
+              <h3>{t("Darstellung")}</h3>
+              <div className="preference-fields">
+                <label>
+                  {t("Sprache")}
+                  <select
+                    aria-label={t("Sprache")}
+                    value={language}
+                    onChange={(event) =>
+                      setLanguage(event.target.value as Language)
+                    }
+                  >
+                    <option value="en">English</option>
+                    <option value="de">Deutsch</option>
+                  </select>
+                </label>
+                <label>
+                  {t("Design")}
+                  <select
+                    aria-label={t("Design")}
+                    value={theme}
+                    onChange={(event) => setTheme(event.target.value as Theme)}
+                  >
+                    <option value="dark">{t("Dunkel")}</option>
+                    <option value="light">{t("Hell")}</option>
+                  </select>
+                </label>
+              </div>
+              <p>{t("Einstellungen werden auf diesem Gerät gespeichert.")}</p>
+              <h3>{t("Dein privater Workspace")}</h3>
               <p>
-                Zugriff über HTTPS mit deinem persönlichen Passwort.
-                Gesundheitsdaten bleiben von deinen übrigen Daten getrennt.
+                {t(
+                  "Zugriff über HTTPS mit deinem persönlichen Passwort. Gesundheitsdaten bleiben von deinen übrigen Daten getrennt.",
+                )}
               </p>
-              <h4>Lokaler Cache</h4>
+              <h4>{t("Lokaler Cache")}</h4>
               <p>
-                Dieser Browser speichert den letzten Dashboard-Stand inklusive
-                Gesundheitswerten für die Offline-Anzeige.
+                {t(
+                  "Dieser Browser speichert den letzten Dashboard-Stand inklusive Gesundheitswerten für die Offline-Anzeige.",
+                )}
               </p>
               <button
                 onClick={() => {
@@ -798,25 +883,28 @@ export default function Home() {
                   setLoaded("");
                 }}
               >
-                Lokalen Cache löschen
+                {t("Lokalen Cache löschen")}
               </button>
-              <h4>Gesundheitsdaten</h4>
+              <h4>{t("Gesundheitsdaten")}</h4>
               <p>
-                Löscht alle importierten Tageswerte auf dem Server. Deaktiviere
-                vorher die Synchronisation in Android, damit sie nicht erneut
-                übertragen werden.
+                {t(
+                  "Löscht alle importierten Tageswerte auf dem Server. Deaktiviere vorher die Synchronisation in Android, damit sie nicht erneut übertragen werden.",
+                )}
               </p>
               <button
                 className="danger"
                 disabled={!enabled}
                 onClick={() => {
-                  if (confirm("Alle Gesundheitsdaten auf dem Server löschen?"))
+                  if (
+                    confirm(t("Alle Gesundheitsdaten auf dem Server löschen?"))
+                  )
                     void mutate("/health/days", "DELETE");
                 }}
               >
-                <Trash2 size={16} /> Gesundheitsdaten löschen
+                <Trash2 size={16} />
+                {t("Gesundheitsdaten löschen")}
               </button>
-              <h4>Sitzung</h4>
+              <h4>{t("Sitzung")}</h4>
               <button
                 disabled={!enabled}
                 onClick={async () => {
@@ -828,16 +916,16 @@ export default function Home() {
                   }
                 }}
               >
-                <LogOut size={16} /> Abmelden
+                <LogOut size={16} />
+                {t("Abmelden")}
               </button>
             </section>
           )}
           <footer>
             <span>
-              <SquareTerminal size={14} /> Monopol_MainFrame · Dein persönliches
-              Life OS
+              <SquareTerminal size={14} /> {slogan}
             </span>
-            <span>Privat. Verbunden. Bei dir.</span>
+            <span>{t("Privat. Verbunden. Bei dir.")}</span>
           </footer>
         </div>
       </main>
@@ -876,18 +964,20 @@ export default function Home() {
           >
             <div className="paneltitle">
               <h3>
-                {labels[editor.kind]} {editor.item ? "bearbeiten" : "anlegen"}
+                {language === "en"
+                  ? `${editor.item ? t("Bearbeiten") : t("Anlegen")} ${labels[editor.kind]}`
+                  : `${labels[editor.kind]} ${editor.item ? t("bearbeiten") : t("anlegen")}`}
               </h3>
               <button
                 type="button"
-                aria-label="Schließen"
+                aria-label={t("Schließen")}
                 onClick={() => setEditor(null)}
               >
                 <X size={19} />
               </button>
             </div>
             <label>
-              Titel
+              {t("Titel")}
               <input
                 name="title"
                 required
@@ -896,7 +986,7 @@ export default function Home() {
               />
             </label>
             <label>
-              Beschreibung
+              {t("Beschreibung")}
               <textarea
                 name="description"
                 rows={5}
@@ -906,7 +996,7 @@ export default function Home() {
             </label>
             {editor.kind === "tasks" && (
               <label>
-                Fällig am
+                {t("Fällig am")}
                 <input
                   type="date"
                   name="due"
@@ -918,7 +1008,7 @@ export default function Home() {
               <>
                 {(["start", "end"] as const).map((k) => (
                   <label key={k}>
-                    {k === "start" ? "Beginn" : "Ende"}
+                    {k === "start" ? t("Beginn") : t("Ende")}
                     <input
                       required
                       type="datetime-local"
@@ -938,7 +1028,7 @@ export default function Home() {
                   </label>
                 ))}
                 <label>
-                  Ort
+                  {t("Ort")}
                   <input
                     name="location"
                     maxLength={500}
@@ -955,7 +1045,7 @@ export default function Home() {
                   disabled={!enabled}
                   onClick={async () => {
                     if (
-                      confirm("Eintrag löschen?") &&
+                      confirm(t("Eintrag löschen?")) &&
                       (await mutate(
                         "/items/" +
                           editor.kind +
@@ -969,11 +1059,12 @@ export default function Home() {
                       setEditor(null);
                   }}
                 >
-                  <Trash2 size={16} /> Löschen
+                  <Trash2 size={16} />
+                  {t("Löschen")}
                 </button>
               )}
               <button className="primary" disabled={!enabled}>
-                Speichern
+                {t("Speichern")}
               </button>
             </div>
           </form>

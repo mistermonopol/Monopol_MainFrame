@@ -1,8 +1,12 @@
-# Monopol_MainFrame · dein persönliches Life OS
+# Monopol_MainFrame your App for Everything
 
 Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Eigene Aufgaben, Notizen und einmalige Termine teilen sich einen Server. Health Connect liefert ausschließlich Tageswerte. Die übrigen Integrationen sind sichtbar als **Nicht verbunden**.
 
-Die Oberfläche verwendet einen dunklen Lila-Look und Consolas mit Monospace-Fallbacks. Die linke Navigation lässt sich auf dem Desktop einklappen und merkt sich die Einstellung. Auf kleinen Bildschirmen öffnet der Menüknopf ein seitliches Menü; Android verwendet ebenfalls einen Drawer und auf breiten Displays eine einklappbare Seitenleiste. Die Android-Schrift ist die lokale Monospace-Systemschrift.
+Die Oberfläche startet auf Englisch. Unter **Settings → Language / Theme** lassen sich Deutsch und Englisch sowie Dark und Light Mode wählen; die Auswahl wird je Browser bzw. Android-Gerät gespeichert. Alle Bedienelemente und Karten haben scharfe, rechteckige Ecken. Consolas mit Monospace-Fallbacks, die einklappbare Seitenleiste und der mobile Drawer bleiben erhalten. Android verwendet die lokale Monospace-Systemschrift.
+
+Die Übersicht enthält ein Schrittediagramm: **Daily** zeigt 14 Tageswerte, **Weekly** die Summen von acht Kalenderwochen ab Montag und **Monthly** zwölf Kalendermonate. Tagesgrenzen richten sich nach `Europe/Berlin`. Fehlende Messungen bleiben leer; gemessene Nullen bleiben Nullwerte. Wochen- und Monatssummen weisen die Zahl erfasster Tage aus, damit unvollständige Zeiträume erkennbar sind. Historie hängt von den tatsächlich synchronisierten und gespeicherten Tagen ab.
+
+UI-Übersetzungen liegen in `web/app/messages.json`. Nach Änderungen mit `node ops/generate-locales.mjs` die native Übersetzungstabelle neu erzeugen. Eigene Aufgaben, Notizen und Termine werden bei einem Sprachwechsel nicht übersetzt oder verändert. API-Fehler verwenden standardmäßig Englisch und berücksichtigen `Accept-Language: de`.
 
 **Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://monopol-ai.de`, Umgebungsvariablen und Passwort-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
 

@@ -8,6 +8,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +37,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.*
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: Store
@@ -42,21 +50,31 @@ class MainActivity : ComponentActivity() {
     private var screen by mutableStateOf("Übersicht")
     private var editor by mutableStateOf<Pair<String, JSONObject?>?>(null)
     private val api get() = Api(store)
+    private var language by mutableStateOf("en")
+    private var theme by mutableStateOf("dark")
+    private fun t(source: String) = Localizer.text(source,language)
+    private fun dateText(value: String) = runCatching { Instant.parse(value).atZone(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)) }.getOrDefault(value)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
+        language = store.get("language").takeIf { it=="de" } ?: "en"
+        theme = store.get("theme").takeIf { it=="light" } ?: "dark"
         data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(
+            MaterialTheme(colorScheme = if(theme=="light") lightColorScheme(
+                primary=Color(0xFF6940A6),onPrimary=Color.White,primaryContainer=Color(0xFFE8DCF8),onPrimaryContainer=Color(0xFF35214F),
+                secondary=Color(0xFF71538D),background=Color(0xFFF7F6FB),onBackground=Color(0xFF241E32),surface=Color.White,
+                onSurface=Color(0xFF241E32),surfaceVariant=Color(0xFFEEEBF5),onSurfaceVariant=Color(0xFF665A78),outline=Color(0xFFB5A6C8)
+            ) else darkColorScheme(
                 primary = Color(0xFFB69AF7), onPrimary = Color(0xFF21152F),
                 primaryContainer = Color(0xFF35294A), onPrimaryContainer = Color(0xFFE2CCFF),
                 secondary = Color(0xFFC4A9E6), background = Color(0xFF11101D),
                 onBackground = Color(0xFFEEE9FB), surface = Color(0xFF1B192D),
                 onSurface = Color(0xFFEEE9FB), surfaceVariant = Color(0xFF2A243A),
                 onSurfaceVariant = Color(0xFFBEB0D2), outline = Color(0xFF50425F)
-            ), typography = programmerTypography) {
+            ), shapes=Shapes(extraSmall=RoundedCornerShape(0.dp),small=RoundedCornerShape(0.dp),medium=RoundedCornerShape(0.dp),large=RoundedCornerShape(0.dp),extraLarge=RoundedCornerShape(0.dp)), typography = programmerTypography) {
                 Surface(Modifier.fillMaxSize()) { App() }
             }
         }
@@ -92,7 +110,7 @@ class MainActivity : ComponentActivity() {
                 connected = true; message = ""
                 if (sync && store.get("syncEnabled") == "true") {
                     try { HealthSync(this@MainActivity).sync(); data = JSONObject(api.call("/dashboard")); store.put("cache", data.toString()) }
-                    catch (e: Exception) { message = "Gesundheit: ${e.message}. Übertragung wird später erneut versucht." }
+                    catch (e: Exception) { message = "${t("Gesundheit:")} ${t(e.message ?: "Die Anfrage konnte nicht gespeichert werden.")} ${t("Übertragung wird später erneut versucht.")}" }
                 }
             } catch (e: Exception) { connected = false; message = e.message ?: "Server nicht erreichbar. Letzter Stand wird angezeigt." }
             finally { busy = false }
@@ -114,7 +132,7 @@ class MainActivity : ComponentActivity() {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             if (maxWidth >= 840.dp) {
                 Row(Modifier.fillMaxSize()) {
-                    Surface(Modifier.width(if (expanded) 282.dp else 76.dp).fillMaxHeight(), color = Color(0xFF18162A)) {
+                    Surface(Modifier.width(if (expanded) 282.dp else 76.dp).fillMaxHeight(), color = MaterialTheme.colorScheme.surfaceVariant) {
                         NavigationContent(expanded, if (expanded) "Navigation einklappen" else "Navigation ausklappen", {
                             expanded = !expanded
                             store.put("sidebarCollapsed", (!expanded).toString())
@@ -129,7 +147,7 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 ModalNavigationDrawer(drawerState = drawerState, drawerContent = {
-                    ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Color(0xFF18162A)) {
+                    ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = MaterialTheme.colorScheme.surfaceVariant, drawerShape = RectangleShape) {
                         NavigationContent(true, "Navigation schließen", { scope.launch { drawerState.close() } }) {
                             screen = it
                             scope.launch { drawerState.close() }
@@ -154,17 +172,17 @@ class MainActivity : ComponentActivity() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 8.dp))
                     Text("Monopol_MainFrame", Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                    IconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronLeft, toggleLabel) }
+                    SquareIconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronLeft, t(toggleLabel)) }
                 }
-                Text("PERSÖNLICHER WORKSPACE", Modifier.padding(12.dp, 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(t("PERSÖNLICHER WORKSPACE"), Modifier.padding(12.dp, 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                IconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronRight, toggleLabel) }
+                SquareIconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronRight, t(toggleLabel)) }
                 Spacer(Modifier.height(20.dp))
             }
             items.forEach { (label, icon) ->
                 if (expanded) NavigationDrawerItem(
-                    label = { Text(label) }, selected = screen == label, onClick = { onSelect(label) },
-                    icon = { Icon(icon, null) }, shape = RoundedCornerShape(7.dp),
+                    label = { Text(t(label)) }, selected = screen == label, onClick = { onSelect(label) },
+                    icon = { Icon(icon, null) }, shape = RoundedCornerShape(0.dp),
                     colors = NavigationDrawerItemDefaults.colors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -172,12 +190,12 @@ class MainActivity : ComponentActivity() {
                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                ) else IconButton(onClick = { onSelect(label) }, modifier = Modifier.size(48.dp).background(
-                    if (screen == label) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(7.dp)
-                )) { Icon(icon, label, tint = if (screen == label) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+                ) else SquareIconButton(onClick = { onSelect(label) }, modifier = Modifier.size(48.dp).background(
+                    if (screen == label) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(0.dp)
+                )) { Icon(icon, t(label), tint = if (screen == label) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             Spacer(Modifier.weight(1f))
-            if (expanded) Text("Dein persönliches Life OS", Modifier.padding(12.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (expanded) Text("Monopol_MainFrame your App for Everything", Modifier.padding(12.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -194,48 +212,49 @@ class MainActivity : ComponentActivity() {
         }
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onOpenNavigation) { Icon(Icons.Outlined.Menu, "Navigation öffnen") }
+                SquareIconButton(onClick = onOpenNavigation) { Icon(Icons.Outlined.Menu, t("Navigation öffnen")) }
                 Column(Modifier.weight(1f).padding(start = 8.dp)) {
                     Text("Monopol_MainFrame", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(screen, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(t(screen), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(if (screen == "Übersicht") "Willkommen im MainFrame." else screen, style = MaterialTheme.typography.headlineSmall)
-                Text(LocalDate.now(ZoneId.of("Europe/Berlin")).toString(), style = MaterialTheme.typography.labelMedium)
-                if (message.isNotEmpty()) Card { Text(message, Modifier.padding(14.dp)) }
-                Text(if (connected) "Server verbunden" else "Offline / noch nicht angemeldet", color = if (connected) MaterialTheme.colorScheme.primary else Color(0xFFE7BE7D))
-                if (store.get("loaded").isNotEmpty()) Text("Letzter Stand: ${store.get("loaded")}", style = MaterialTheme.typography.labelSmall)
-                OutlinedButton(onClick = { refresh(sync = true) }, enabled = !busy) { Text(if (busy) "Wird geladen …" else "Aktualisieren") }
+                Text(t(if (screen == "Übersicht") "Willkommen im MainFrame." else screen), style = MaterialTheme.typography.headlineSmall)
+                Text(LocalDate.now(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)), style = MaterialTheme.typography.labelMedium)
+                if (message.isNotEmpty()) Card(shape = RectangleShape) { Text(t(message), Modifier.padding(14.dp)) }
+                Text(t(if (connected) "Server verbunden" else "Offline / Anmeldung nötig"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (store.get("loaded").isNotEmpty()) Text("${t("Letzter geladener Stand:")} ${dateText(store.get("loaded"))}", style = MaterialTheme.typography.labelSmall)
+                OutlinedButton(onClick = { refresh(sync = true) }, enabled = !busy, shape = RectangleShape) { Text(t(if (busy) "Wird geladen …" else "Aktualisieren")) }
                 if (screen == "Übersicht") {
-                    Card { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Weniger Tabs. Mehr Überblick.", style = MaterialTheme.typography.titleLarge)
-                        Text("Deine Aufgaben, Termine und Gesundheit. Ein ruhiger Ort für alles, was dich bewegt.")
+                    Card(shape = RectangleShape) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Monopol_MainFrame your App for Everything", style = MaterialTheme.typography.titleLarge)
+                        Text(t("Deine Aufgaben, Termine und Gesundheit."))
                     } }
-                    Text("Heute", style = MaterialTheme.typography.titleMedium)
+                    Text(t("Heute"), style = MaterialTheme.typography.titleMedium)
                     val days = data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()
+                    StepsChart(days,language)
                     val today = days.objects().find { it.optString("day") == LocalDate.now(ZoneId.of("Europe/Berlin")).toString() }
                     HealthCard(today)
-                    Text("Meine Aufgaben", style = MaterialTheme.typography.titleMedium)
+                    Text(t("Meine Aufgaben"), style = MaterialTheme.typography.titleMedium)
                     ItemList("tasks", data.optJSONArray("tasks") ?: JSONArray(), 4)
-                    Text("Nächste Termine", style = MaterialTheme.typography.titleMedium)
+                    Text(t("Als Nächstes"), style = MaterialTheme.typography.titleMedium)
                     val future = (data.optJSONArray("events") ?: JSONArray()).objects().filter { runCatching { Instant.parse(it.getString("end")) > Instant.now() }.getOrDefault(false) }.sortedBy { it.optString("start") }
                     ItemList("events", JSONArray(future), 3)
-                    listOf("Finanzen · Budget & Ausgaben", "Smart Home · Zuhause", "Musik · Releases & Projekte").forEach { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text(it); Text("Nicht verbunden", style = MaterialTheme.typography.labelSmall) } } }
+                    listOf("Finanzen" to "Budget & Ausgaben", "Smart Home" to "Dein Zuhause im Blick", "Musik" to "Releases & Projekte").forEach { (title,description) -> Card(Modifier.fillMaxWidth(), shape = RectangleShape) { Column(Modifier.padding(16.dp)) { Text(t(title)); Text(t(description)); Text(t("Nicht verbunden"), style = MaterialTheme.typography.labelSmall) } } }
                 }
                 val kind = when (screen) { "Aufgaben" -> "tasks"; "Notizen" -> "notes"; "Kalender" -> "events"; else -> null }
                 if (kind != null) {
-                    Button(onClick = { editor = kind to null }, enabled = connected && !busy) { Text("Neuer Eintrag") }
+                    Button(onClick = { editor = kind to null }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Neuer Eintrag")) }
                     ItemList(kind, data.optJSONArray(kind) ?: JSONArray())
                 }
                 if (screen == "Gesundheit") {
-                    Text("Health Connect liest nur freigegebene Daten. Übertragen werden Tageswerte, keine Rohmessreihen.")
-                    if (!healthAvailable) Text("Health Connect ist auf diesem Gerät nicht verfügbar.")
-                    Button(onClick = { permissions.launch(HealthSync.permissions) }, enabled = healthAvailable) { Text("Leseberechtigungen verwalten") }
-                    if (healthAvailable && HealthSync(this@MainActivity).backgroundAvailable()) OutlinedButton(onClick = { permissions.launch(setOf(HealthSync.BACKGROUND)) }) { Text("Hintergrundzugriff erlauben") }
-                    Button(onClick = { store.put("syncEnabled", "true"); HealthSync.schedule(this@MainActivity); refresh(sync = true) }, enabled = connected && healthAvailable && !busy) { Text("Synchronisation aktivieren") }
-                    OutlinedButton(onClick = { store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); message = "Gesundheitssynchronisation gestoppt." }) { Text("Synchronisation stoppen") }
-                    Text("Letzte Übertragung: ${data.optJSONObject("health")?.optString("last_sync")?.takeUnless { it == "null" } ?: "Noch keine"}")
+                    Text(t("Health Connect liest nur freigegebene Daten. Übertragen werden Tageswerte, keine Rohmessreihen."))
+                    if (!healthAvailable) Text(t("Health Connect ist auf diesem Gerät nicht verfügbar."))
+                    Button(onClick = { permissions.launch(HealthSync.permissions) }, enabled = healthAvailable, shape = RectangleShape) { Text(t("Leseberechtigungen verwalten")) }
+                    if (healthAvailable && HealthSync(this@MainActivity).backgroundAvailable()) OutlinedButton(onClick = { permissions.launch(setOf(HealthSync.BACKGROUND)) }, shape = RectangleShape) { Text(t("Hintergrundzugriff erlauben")) }
+                    Button(onClick = { store.put("syncEnabled", "true"); HealthSync.schedule(this@MainActivity); refresh(sync = true) }, enabled = connected && healthAvailable && !busy, shape = RectangleShape) { Text(t("Synchronisation aktivieren")) }
+                    OutlinedButton(onClick = { store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); message = "Gesundheitssynchronisation gestoppt." }, shape = RectangleShape) { Text(t("Synchronisation stoppen")) }
+                    Text("${t("Letzte Übertragung:")} ${data.optJSONObject("health")?.optString("last_sync")?.takeUnless { it == "null" }?.let {dateText(it)} ?: t("Noch keine")}")
                     (data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()).objects().forEach { day -> Text(day.optString("day")); HealthCard(day) }
                 }
                 if (screen == "Einstellungen") SettingsContent()
@@ -245,26 +264,26 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun HealthCard(day: JSONObject?) {
-        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            fun value(key: String) = if (day == null || day.isNull(key)) "—" else day.optString(key)
-            Text("Schritte: ${value("steps")}")
-            Text("Schlaf: ${value("sleep_minutes")} Minuten")
-            Text("Ruhepuls: ${value("resting_pulse")} bpm")
-            Text("Gewicht: ${value("weight_kg")} kg")
+        Card(Modifier.fillMaxWidth(), shape = RectangleShape) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            fun value(key: String) = if (day == null || day.isNull(key)) "—" else java.text.NumberFormat.getNumberInstance(if(language=="de") Locale.GERMANY else Locale.UK).apply { maximumFractionDigits=1 }.format(day.optDouble(key))
+            Text("${t("Schritte")}: ${value("steps")}")
+            Text("${t("Schlaf")}: ${value("sleep_minutes")} ${t("Minuten")}")
+            Text("${t("Ruhepuls")}: ${value("resting_pulse")} bpm")
+            Text("${t("Gewicht (kg)")}: ${value("weight_kg")}")
         } }
     }
 
     @Composable private fun ItemList(kind: String, items: JSONArray, limit: Int = Int.MAX_VALUE) {
-        if (items.length() == 0) Text("Noch keine Einträge.", style = MaterialTheme.typography.bodyMedium)
+        if (items.length() == 0) Text(t("Noch keine Einträge."), style = MaterialTheme.typography.bodyMedium)
         items.objects().take(limit).forEach { item ->
-            Card(onClick = { editor = kind to item }, modifier = Modifier.fillMaxWidth()) {
+            Card(onClick = { editor = kind to item }, modifier = Modifier.fillMaxWidth(), shape = RectangleShape) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(item.optString("title"), style = MaterialTheme.typography.titleMedium)
                     if (kind == "tasks") Row {
-                        Checkbox(checked = item.optBoolean("completed"), enabled = connected && !busy, onCheckedChange = { mutate("/items/tasks/${item.getString("id")}", "PUT", JSONObject(item.toString()).put("completed", it)) })
-                        Text(if (item.optBoolean("completed")) "Erledigt" else "Offen", Modifier.padding(top = 13.dp))
+                        SquareCheckbox(checked = item.optBoolean("completed"), enabled = connected && !busy, onCheckedChange = { mutate("/items/tasks/${item.getString("id")}", "PUT", JSONObject(item.toString()).put("completed", it)) })
+                        Text(t(if (item.optBoolean("completed")) "Erledigt" else "Offen"), Modifier.padding(top = 13.dp))
                     }
-                    if (kind == "events") Text("${item.optString("start")} – ${item.optString("end")}\n${item.optString("location")}")
+                    if (kind == "events") Text("${dateText(item.optString("start"))} – ${dateText(item.optString("end"))}\n${item.optString("location")}")
                     if (item.optString("description").isNotEmpty()) Text(item.optString("description"))
                 }
             }
@@ -272,13 +291,19 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun SettingsContent() {
+        Text(t("Darstellung"),style=MaterialTheme.typography.titleMedium)
+        Text(t("Sprache"))
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("en" to "English","de" to "Deutsch").forEach { (value,label) -> OutlinedButton(onClick={language=value;store.put("language",value);message=""}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(language==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(label)} } }
+        Text(t("Design"))
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Dunkel","light" to "Hell").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
+        Text(t("Einstellungen werden auf diesem Gerät gespeichert."),style=MaterialTheme.typography.bodySmall)
         var server by remember { mutableStateOf(store.get("server").ifBlank { "https://monopol-ai.de" }) }
         var password by remember { mutableStateOf("") }
         var confirmDelete by remember { mutableStateOf(false) }
-        Text("Serververbindung", style = MaterialTheme.typography.titleMedium)
-        Text("Melde dich mit deinem persönlichen Passwort bei https://monopol-ai.de an.")
-        OutlinedTextField(server, { server = it }, label = { Text("Serveradresse (HTTPS)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedTextField(password, { password = it }, label = { Text("Passwort") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+        Text(t("Serververbindung"), style = MaterialTheme.typography.titleMedium)
+        Text(t("Melde dich mit deinem persönlichen Passwort bei https://monopol-ai.de an."))
+        OutlinedTextField(server, { server = it }, label = { Text(t("Serveradresse (HTTPS)")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RectangleShape)
+        OutlinedTextField(password, { password = it }, label = { Text(t("Passwort")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), shape = RectangleShape)
         Button(onClick = {
             val normalized = server.trim().trimEnd('/')
             if (normalized != store.get("server")) {
@@ -287,19 +312,19 @@ class MainActivity : ComponentActivity() {
                 data = JSONObject(); connected = false
             }
             store.put("server", normalized); login(password) { password = "" }
-        }, enabled = !busy && password.length >= 16) { Text("Anmelden") }
-        Text("Datenschutz", style = MaterialTheme.typography.titleMedium)
-        Text("Gesundheitsdaten werden nur nach deiner Freigabe gelesen und als Tageswerte auf deinen Server übertragen. Der lokale Cache ist mit Android Keystore verschlüsselt. Android-Berechtigungen kannst du jederzeit in Health Connect widerrufen.")
-        OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); data = JSONObject(); message = "Lokaler Cache gelöscht." }) { Text("Lokalen Cache löschen") }
-        OutlinedButton(onClick = { confirmDelete = true }, enabled = connected && !busy) { Text("Gesundheitsdaten auf Server löschen") }
+        }, enabled = !busy && password.length >= 16, shape = RectangleShape) { Text(t("Anmelden")) }
+        Text(t("Datenschutz"), style = MaterialTheme.typography.titleMedium)
+        Text(t("Gesundheitsdaten werden nur nach deiner Freigabe gelesen und als Tageswerte auf deinen Server übertragen. Der lokale Cache ist mit Android Keystore verschlüsselt. Android-Berechtigungen kannst du jederzeit in Health Connect widerrufen."))
+        OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); data = JSONObject(); message = "Lokaler Cache gelöscht." }, shape = RectangleShape) { Text(t("Lokalen Cache löschen")) }
+        OutlinedButton(onClick = { confirmDelete = true }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Gesundheitsdaten auf Server löschen")) }
         OutlinedButton(onClick = { mutate("/auth/logout", "POST") {
             store.remove("token"); store.remove("cache"); store.remove("loaded"); store.put("syncEnabled", "false")
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); data = JSONObject(); connected = false
-        } }, enabled = connected && !busy) { Text("Abmelden") }
-        if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("Gesundheitsdaten löschen?") }, text = { Text("Alle Tageswerte werden auf dem Server gelöscht. Die Synchronisation auf diesem Pixel wird gestoppt.") }, confirmButton = { TextButton(onClick = {
+        } }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Abmelden")) }
+        if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(t("Gesundheitsdaten löschen?")) }, text = { Text(t("Alle Tageswerte werden auf dem Server gelöscht. Die Synchronisation auf diesem Pixel wird gestoppt.")) }, confirmButton = { TextButton(onClick = {
             store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
             mutate("/health/days", "DELETE") { store.remove("cache"); confirmDelete = false }
-        }) { Text("Löschen") } }, dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } })
+        }, shape = RectangleShape) { Text(t("Löschen")) } }, dismissButton = { TextButton(onClick = { confirmDelete = false }, shape = RectangleShape) { Text(t("Abbrechen")) } }, shape = RectangleShape)
     }
 
     @Composable private fun Editor(kind: String, item: JSONObject?) {
@@ -312,19 +337,19 @@ class MainActivity : ComponentActivity() {
         var location by remember { mutableStateOf(item?.optString("location") ?: "") }
         var validation by remember { mutableStateOf("") }
         var deleting by remember { mutableStateOf(false) }
-        AlertDialog(onDismissRequest = { editor = null }, title = { Text(if (item == null) "Neuer Eintrag" else "Eintrag bearbeiten") }, text = {
+        AlertDialog(onDismissRequest = { editor = null }, title = { Text(t(if (item == null) "Neuer Eintrag" else "Eintrag bearbeiten")) }, text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (validation.isNotBlank()) Text(validation, color = MaterialTheme.colorScheme.error)
-                OutlinedTextField(title, { title = it }, label = { Text("Titel") })
-                OutlinedTextField(description, { description = it }, label = { Text("Beschreibung") }, minLines = 3)
-                if (kind == "tasks") OutlinedTextField(due, { due = it }, label = { Text("Fällig: JJJJ-MM-TT (optional)") })
+                if (validation.isNotBlank()) Text(t(validation), color = MaterialTheme.colorScheme.error)
+                OutlinedTextField(title, { title = it }, label = { Text(t("Titel")) }, shape = RectangleShape)
+                OutlinedTextField(description, { description = it }, label = { Text(t("Beschreibung")) }, minLines = 3, shape = RectangleShape)
+                if (kind == "tasks") OutlinedTextField(due, { due = it }, label = { Text(t("Fällig: JJJJ-MM-TT (optional)")) }, shape = RectangleShape)
                 if (kind == "events") {
-                    Text("Termine in Europe/Berlin", style = MaterialTheme.typography.labelSmall)
-                    OutlinedTextField(start, { start = it }, label = { Text("Beginn: JJJJ-MM-TTTHH:MM") })
-                    OutlinedTextField(end, { end = it }, label = { Text("Ende: JJJJ-MM-TTTHH:MM") })
-                    OutlinedTextField(location, { location = it }, label = { Text("Ort") })
+                    Text(t("Termine in Europe/Berlin"), style = MaterialTheme.typography.labelSmall)
+                    OutlinedTextField(start, { start = it }, label = { Text(t("Beginn: JJJJ-MM-TTTHH:MM")) }, shape = RectangleShape)
+                    OutlinedTextField(end, { end = it }, label = { Text(t("Ende: JJJJ-MM-TTTHH:MM")) }, shape = RectangleShape)
+                    OutlinedTextField(location, { location = it }, label = { Text(t("Ort")) }, shape = RectangleShape)
                 }
-                if (item != null) TextButton(onClick = { deleting = true }, enabled = connected && !busy) { Text("Eintrag löschen", color = MaterialTheme.colorScheme.error) }
+                if (item != null) TextButton(onClick = { deleting = true }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Eintrag löschen"), color = MaterialTheme.colorScheme.error) }
             }
         }, confirmButton = { TextButton(enabled = connected && !busy, onClick = {
             try {
@@ -340,12 +365,23 @@ class MainActivity : ComponentActivity() {
                 }
                 mutate("/items/$kind" + if (item == null) "" else "/${item.getString("id")}", if (item == null) "POST" else "PUT", body) { editor = null }
             } catch (e: Exception) { validation = e.message ?: "Bitte Eingaben prüfen." }
-        }) { Text("Speichern") } }, dismissButton = { TextButton(onClick = { editor = null }) { Text("Abbrechen") } })
-        if (deleting && item != null) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Eintrag wirklich löschen?") }, confirmButton = { TextButton(onClick = { mutate("/items/$kind/${item.getString("id")}?version=${item.getInt("version")}", "DELETE") { deleting = false; editor = null } }) { Text("Löschen") } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("Abbrechen") } })
+        }, shape = RectangleShape) { Text(t("Speichern")) } }, dismissButton = { TextButton(onClick = { editor = null }, shape = RectangleShape) { Text(t("Abbrechen")) } }, shape = RectangleShape)
+        if (deleting && item != null) AlertDialog(onDismissRequest = { deleting = false }, title = { Text(t("Eintrag wirklich löschen?")) }, confirmButton = { TextButton(onClick = { mutate("/items/$kind/${item.getString("id")}?version=${item.getInt("version")}", "DELETE") { deleting = false; editor = null } }, shape = RectangleShape) { Text(t("Löschen")) } }, dismissButton = { TextButton(onClick = { deleting = false }, shape = RectangleShape) { Text(t("Abbrechen")) } }, shape = RectangleShape)
     }
 }
 
 fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+
+@Composable private fun SquareIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(modifier.size(48.dp).clickable(role=Role.Button,onClick=onClick),contentAlignment=Alignment.Center) { content() }
+}
+
+@Composable private fun SquareCheckbox(checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val color=if(enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(Modifier.padding(10.dp).size(24.dp).border(1.dp,color,RectangleShape).background(if(checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface).toggleable(value=checked,enabled=enabled,role=Role.Checkbox,onValueChange=onCheckedChange),contentAlignment=Alignment.Center) {
+        if(checked) Icon(Icons.Outlined.Check,null,tint=color,modifier=Modifier.size(18.dp))
+    }
+}
 
 private val programmerTypography = Typography().let { base ->
     Typography(
