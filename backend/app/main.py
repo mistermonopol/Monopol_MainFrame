@@ -16,7 +16,7 @@ from sqlalchemy import select, delete, text
 
 from .config import settings
 from .db import Session, HealthSession, Item, SessionToken, HealthDay, now
-from .localization import MESSAGES
+from .localization import MESSAGES, GERMAN_MESSAGES
 
 app = FastAPI(title="Monopol_MainFrame API", version="1.0.0")
 
@@ -26,6 +26,8 @@ async def localized_error(request: Request, error: StarletteHTTPException):
     detail = error.detail
     if not request.headers.get("accept-language", "en").lower().startswith("de"):
         detail = MESSAGES.get(detail, detail) if isinstance(detail, str) else detail
+    elif isinstance(detail, str):
+        detail = GERMAN_MESSAGES.get(detail, detail)
     return JSONResponse(status_code=error.status_code, content={"detail": detail}, headers=error.headers)
 
 

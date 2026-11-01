@@ -24,6 +24,16 @@ Beim Absenden einer Nachricht übermittelt das Backend den aktuellen Bestand aus
 
 Ohne API-Konfiguration bleibt der Rest der App nutzbar. Testaufrufe sind mit gemocktem Anbieter geprüft; eine echte Verbindung benötigt deine Werte. Grenzen: 30 Chatnachrichten pro Anfrage, 12.000 Zeichen pro Nachricht, 180.000 Zeichen App-Kontext, fünf Provider-Runden mit höchstens acht Note-Abfragen je Runde. Pro gelesener Notiz werden maximal 30.000 Zeichen an die KI geschickt und Kürzungen markiert.
 
+### Fehlerdiagnose für den Agenten
+
+Für OpenAI `AI_BASE_URL=https://api.openai.com/v1` verwenden. `AI_MODEL` muss eine genaue, für dein API-Projekt verfügbare Modell-ID sein, die Chat Completions und bei Vault-Zugriff Tool Calling unterstützt. `AI_API_KEY` beim Dienst `api` setzen, Build time und Runtime aktivieren und nach Änderungen neu deployen. Keine Schlüssel in Screenshots, Chat oder Repository kopieren. Eine vollständig eingetragene `/chat/completions`-Adresse wird ebenfalls unterstützt; der Pfad wird nicht doppelt angehängt.
+
+Die App unterscheidet abgewiesenen Schlüssel (401), fehlende Berechtigung (403), nicht gefundenes Modell/Endpunkt (404), ausgeschöpftes API-Kontingent und Anfragelimit (beides 429), inkompatible Parameter (400/422), Anbieter-Ausfall sowie DNS-/Verbindungsprobleme und Zeitüberschreitungen. Die ursprüngliche pauschale Meldung wurde ersetzt. Wird sie weiterhin angezeigt, läuft noch ein älterer API-Container.
+
+OpenAI-Aufrufe verwenden `max_completion_tokens`; andere kompatible Anbieter zunächst `max_tokens`. Nur wenn der Anbieter ausdrücklich den verwendeten Token-Parameter mit `unsupported_parameter` ablehnt, wird einmal mit dem anderen Namen angefragt. Keine automatischen Wiederholungen bei Schlüssel-, Kontingent- oder Verbindungsfehlern. Leere oder ungültige Antworten werden als Fehler angezeigt. Rohe Anbieterfehlermeldungen werden nicht an Clients weitergereicht, da sie Schlüssel oder Anfrageinhalte enthalten können.
+
+Siehe [OpenAI Docs: Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) und [Fehlercodes](https://developers.openai.com/api/docs/guides/error-codes).
+
 ### Obsidian-Vault verbinden
 
 Der Dienst `api` bekommt ein **persistentes Docker-Volume `obsidian` unter `/vault`**; Coolify setzt `OBSIDIAN_VAULT_PATH=/vault` bereits in Compose. Der neue Tab kann dort Markdown-Notizen erstellen, lesen, suchen und bearbeiten. Änderungen werden atomar geschrieben; hat Obsidian eine Datei inzwischen geändert, muss sie vor dem Speichern neu geladen werden. Bis zu 2.000 `.md`-Dateien werden gelistet, je Datei maximal 200 KB. Versteckte Konfigurationsordner und symbolische Links bleiben ausgeschlossen. Kein Löschen von Vault-Dateien über die App.

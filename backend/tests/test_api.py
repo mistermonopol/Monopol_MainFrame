@@ -120,6 +120,119 @@ def test_integrations_require_auth_and_report_missing_config(client, monkeypatch
         assert client.get(path,headers={'Authorization':'Bearer invalid'}).status_code==401
 
 
+def mock_ai(monkeypatch, handler, base='https://api.openai.com/v1'):
+    from app.config import settings
+    import app.integrations as integration
+    import httpx
+    from pydantic import SecretStr
+    monkeypatch.setattr(settings,'obsidian_vault_path','')
+    monkeypatch.setattr(settings,'ai_base_url',base)
+    monkeypatch.setattr(settings,'ai_model','configured-model')
+    monkeypatch.setattr(settings,'ai_api_key',SecretStr('test-secret-never-echo'))
+    real_client=httpx.AsyncClient
+    monkeypatch.setattr(integration.httpx,'AsyncClient',lambda **kwargs:real_client(transport=httpx.MockTransport(handler),**kwargs))
+
+
+@pytest.mark.parametrize('base', [' https://api.openai.com/v1/ ', 'https://api.openai.com/v1/chat/completions/'])
+def test_openai_endpoint_and_token_parameter(client,monkeypatch,base):
+    import json,httpx
+    def handle(request):
+        assert str(request.url)=='https://api.openai.com/v1/chat/completions'
+        payload=json.loads(request.content)
+        assert payload['model']=='configured-model'
+        assert payload['max_completion_tokens']==2000
+        assert 'max_tokens' not in payload
+        assert 'tools' not in payload  # No vault: no unsupported tools required.
+        return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Ready'}}]})
+    mock_ai(monkeypatch,handle,base)
+    result=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert result.status_code==200
+    assert result.json()['reply']=='Ready'
+
+
+@pytest.mark.parametrize('status,code,expected',[
+    (401,'invalid_api_key','HTTP 401'),(403,None,'HTTP 403'),
+    (404,'model_not_found','AI_MODEL'),(404,None,'AI_BASE_URL'),
+    (429,'insufficient_quota','billing'),(429,'rate_limit_exceeded','rate limit'),
+    (400,'context_length_exceeded','context limit'),(400,'unsupported_parameter','request parameters'),
+    (422,None,'Chat Completions'),(500,None,'temporarily unavailable'),(302,None,'unexpected HTTP status')])
+def test_ai_errors_are_actionable_without_echoing_secrets(client,monkeypatch,status,code,expected):
+    import httpx
+    calls=[]
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(status,json={'error':{'code':code,'message':'key=test-secret-never-echo; user private health details'}},headers={'Location':'https://wrong-host.test'})
+    mock_ai(monkeypatch,handle)
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code==502
+    assert expected in response.json()['detail']
+    assert 'test-secret' not in response.text
+    assert 'private health' not in response.text
+    assert len(calls)==1  # No generation retries or redirects on auth/quota errors.
+
+
+def test_compatible_gateway_retries_only_rejected_token_parameter(client,monkeypatch):
+    import httpx,json
+    calls=[]
+    def handle(request):
+        data=json.loads(request.content);calls.append(data)
+        if len(calls)==1:
+            assert data['max_tokens']==2000
+            return httpx.Response(400,json={'error':{'code':'unsupported_parameter','param':'max_tokens'}})
+        assert data['max_completion_tokens']==2000
+        assert 'max_tokens' not in data
+        return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Works'}}]})
+    mock_ai(monkeypatch,handle,'https://gateway.test/v1')
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code==200
+    assert len(calls)==2
+
+
+@pytest.mark.parametrize('body', [{}, {'choices':[]}, {'choices':[{'message':None}]},
+    {'choices':[{'message':{'role':'assistant','content':['invalid']}}]},
+    {'choices':[{'message':{'role':'assistant','content':None,'tool_calls':[{}]}}]}])
+def test_ai_malformed_responses_do_not_crash(client,monkeypatch,body):
+    import httpx
+    mock_ai(monkeypatch,lambda request:httpx.Response(200,json=body))
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code==502
+    assert 'invalid Chat Completions response' in response.json()['detail']
+
+
+@pytest.mark.parametrize('error,status,expected', [('timeout',504,'timed out'),('connect',502,'DNS')])
+def test_ai_connection_errors(client,monkeypatch,error,status,expected):
+    import httpx
+    def handle(request):
+        if error=='timeout':raise httpx.ReadTimeout('sensitive upstream data',request=request)
+        raise httpx.ConnectError('sensitive upstream data',request=request)
+    mock_ai(monkeypatch,handle)
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code==status
+    assert expected in response.json()['detail']
+    assert 'sensitive' not in response.text
+
+
+def test_openai_missing_key_and_insecure_endpoint_fail_before_network(client,monkeypatch):
+    from app.config import settings
+    from pydantic import SecretStr
+    mock_ai(monkeypatch,lambda request:pytest.fail('No provider request expected'))
+    monkeypatch.setattr(settings,'ai_api_key',SecretStr(''))
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code==503
+    assert 'AI_API_KEY is missing' in response.json()['detail']
+    monkeypatch.setattr(settings,'ai_base_url','http://api.openai.com/v1')
+    assert client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]}).status_code==503
+
+
+def test_ai_provider_diagnostic_is_localized(client,monkeypatch):
+    import httpx
+    mock_ai(monkeypatch,lambda request:httpx.Response(401,json={'error':{'message':'private upstream text'}}))
+    response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]},headers={'Accept-Language':'de'})
+    assert response.status_code==502
+    assert 'API-Schlüssel' in response.json()['detail']
+    assert 'HTTP 401' in response.json()['detail']
+
+
 def test_error_language_defaults_to_english_and_supports_german(client):
     headers={"Authorization":"Bearer missing"}
     assert client.get("/api/v1/session",headers=headers).json()["detail"] == "Please sign in"
