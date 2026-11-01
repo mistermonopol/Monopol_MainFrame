@@ -6,18 +6,17 @@ from pathlib import Path
 root = tempfile.TemporaryDirectory()
 os.environ["DATABASE_URL"] = os.getenv("TEST_DATABASE_URL", "sqlite:///" + str(Path(root.name) / "core.db"))
 os.environ["HEALTH_DATABASE_URL"] = os.getenv("TEST_HEALTH_DATABASE_URL", "sqlite:///" + str(Path(root.name) / "health.db"))
-os.environ["SESSION_SECRET"] = "test-only-secret-with-sufficient-entropy"
+os.environ["ADMIN_PASSWORD"] = "test-only-password-with-sufficient-entropy"
 os.environ["PUBLIC_URL"] = "https://life.test"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import base64
 import hashlib
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
-from app.main import app, digest
-from app.db import Session, SessionToken, LoginCode, Item, HealthSession, HealthDay, engine, health_engine
+from app.main import app, digest, login_failures
+from app.db import Session, SessionToken, Item, HealthSession, HealthDay, engine, health_engine
 from app.migrate import migrate
 import pytest
 
@@ -34,8 +33,9 @@ def close_databases():
 
 @pytest.fixture
 def client():
+    login_failures.clear()
     with Session.begin() as db:
-        for model in [Item, SessionToken, LoginCode]:
+        for model in [Item, SessionToken]:
             db.query(model).delete()
         db.add(SessionToken(digest=digest("test-token"), expires=time.time() + 300))
     with HealthSession.begin() as db:
@@ -90,16 +90,13 @@ def test_health_rejects_invalid_import(client):
     assert client.put("/api/v1/health/days", json={"days": [{"day": "2026-11-01", "steps": -1}]}).status_code == 422
 
 
-def test_native_pkce_single_use(client):
-    verifier = "a" * 64
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
-    with Session.begin() as db:
-        db.add(LoginCode(digest=digest("c" * 64), challenge=challenge, expires=time.time() + 60))
-    path = "/api/v1/auth/native/exchange"
-    assert client.post(path, json={"code": "c" * 64, "verifier": "b" * 64}).status_code == 401
-    result = client.post(path, json={"code": "c" * 64, "verifier": verifier})
+def test_native_password_login_and_logout(client):
+    path = "/api/v1/auth/native/login"
+    assert client.post(path, json={"password": "wrong"}).status_code == 401
+    result = client.post(path, json={"password": os.environ["ADMIN_PASSWORD"]})
     assert result.status_code == 200
-    assert client.post(path, json={"code": "c" * 64, "verifier": verifier}).status_code == 401
+    assert "set-cookie" not in result.headers
+    assert result.json()["expires_in"] == 7 * 86400
     token = result.json()["access_token"]
     assert client.post("/api/v1/auth/logout", headers={"Authorization": "Bearer " + token}).status_code == 200
     assert client.get("/api/v1/session", headers={"Authorization": "Bearer " + token}).status_code == 401
@@ -112,36 +109,38 @@ def test_cookie_origin_protection(client):
     assert client.post("/api/v1/items/notes", json={"title": "Notiz"}, headers={"Origin": "https://life.test"}).status_code == 201
 
 
-def test_google_rejects_unapproved_and_unverified_accounts(client, monkeypatch):
-    from app.main import oauth
-    from app.config import settings
-    monkeypatch.setattr(settings, "allowed_email", "owner@example.com")
-    for identity in [{"email": "stranger@example.com", "email_verified": True},
-                     {"email": "owner@example.com", "email_verified": False}]:
-        async def fake_token(*args, **kwargs):
-            return {"userinfo": identity}
-        monkeypatch.setattr(oauth.google, "authorize_access_token", fake_token)
-        assert client.get("/api/v1/auth/callback").status_code == 403
-
-
-def test_google_allowed_account_session(client, monkeypatch):
-    from app.main import oauth
-    from app.config import settings
-    monkeypatch.setattr(settings, "allowed_email", "owner@example.com")
-    async def fake_token(*args, **kwargs):
-        return {"userinfo": {"email": "owner@example.com", "email_verified": True}}
-    monkeypatch.setattr(oauth.google, "authorize_access_token", fake_token)
-    result = client.get("/api/v1/auth/callback", follow_redirects=False)
-    assert result.status_code == 307
+def test_web_password_login(client):
+    client.headers.pop("Authorization")
+    assert client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}).status_code == 403
+    headers = {"Origin": "https://life.test"}
+    assert client.post("/api/v1/auth/login", json={"password": "wrong"}, headers=headers).status_code == 401
+    result = client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}, headers=headers)
+    assert result.status_code == 200
     assert "HttpOnly" in result.headers["set-cookie"]
     assert "Secure" in result.headers["set-cookie"]
     assert result.headers["cache-control"] == "no-store"
+    assert client.get("/api/v1/session").status_code == 200
+    assert client.post("/api/v1/auth/logout", headers=headers).status_code == 200
+    assert client.get("/api/v1/session").status_code == 401
 
 
-def test_expired_native_code(client):
+def test_login_throttling(client):
+    for _ in range(5):
+        assert client.post("/api/v1/auth/native/login", json={"password": "wrong"}).status_code == 401
+    result = client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}, headers={"Origin": "https://life.test"})
+    assert result.status_code == 429
+    assert result.headers["Retry-After"] == "60"
+    login_failures.clear()
+    login_failures.extend([time.monotonic() - 61] * 5)
+    assert client.post("/api/v1/auth/native/login", json={"password": os.environ["ADMIN_PASSWORD"]}).status_code == 200
+
+
+def test_legacy_login_and_sessions_removed(client):
     with Session.begin() as db:
-        db.add(LoginCode(digest=digest("e" * 64), challenge="x" * 43, expires=0))
-    assert client.post("/api/v1/auth/native/exchange", json={"code": "e" * 64, "verifier": "a" * 64}).status_code == 401
+        db.add(SessionToken(digest=hashlib.sha256(b"legacy-token").hexdigest(), expires=time.time() + 60))
+    assert client.get("/api/v1/session", headers={"Authorization": "Bearer legacy-token"}).status_code == 401
+    assert client.get("/api/v1/auth/callback").status_code == 404
+    assert client.post("/api/v1/auth/native/exchange", json={}).status_code == 404
 
 
 @pytest.mark.parametrize("kind,payload", [

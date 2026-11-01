@@ -29,10 +29,7 @@ services:
       DATABASE_URL: postgresql+psycopg://life_app:${APP_DB_PASSWORD}@db/life
       HEALTH_DATABASE_URL: postgresql+psycopg://life_health:${HEALTH_DB_PASSWORD}@db/life
       PUBLIC_URL: ${PUBLIC_URL:?Set the external HTTPS URL without a trailing slash}
-      ALLOWED_EMAIL: ${ALLOWED_EMAIL:?Set your Google account email}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET}
-      SESSION_SECRET: ${SESSION_SECRET:?Set a random secret of at least 32 characters}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a strong login password of at least 16 characters}
       COOKIE_SECURE: "true"
     # Run schema initialization before accepting traffic. No one-shot service
     # that Coolify could incorrectly report as exited/unhealthy is needed.

@@ -7,6 +7,29 @@
   --muted: #87938e;
   --mint: #b8efd2;
 }
+.loginform {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 22px;
+  margin-bottom: 20px;
+}
+.loginform > div {
+  flex: 1 1 220px;
+}
+.loginform label {
+  font-size: 12px;
+}
+.loginform input {
+  flex: 1 1 180px;
+  min-width: 0;
+  background: #101713;
+  color: var(--text);
+  border: 1px solid #38483d;
+  border-radius: 6px;
+  padding: 11px;
+}
 * {
   box-sizing: border-box;
 }

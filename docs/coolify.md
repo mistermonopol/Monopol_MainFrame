@@ -14,17 +14,11 @@ Der ursprüngliche private Betrieb bleibt der empfohlene Weg:
 
 Eine bewusst öffentlich erreichbare HTTPS-Domain ist ebenfalls möglich; siehe Abschnitt 7. Beide Varianten brauchen keine Codeänderungen.
 
-## 2. Google-Anmeldung vorbereiten
+## 2. Persönliches Passwort festlegen
 
-Im Google-Cloud-Projekt die OAuth-Zustimmung mit den Bereichen `openid` und `email` konfigurieren. Bei einer externen Test-App dein Google-Konto als Testnutzer hinzufügen. Einen **Webanwendung**-OAuth-Client erstellen.
+Web und Android melden sich direkt mit deinem `ADMIN_PASSWORD` an. Es ist kein externes Konto, keine E-Mail-Adresse und kein OAuth-Client erforderlich. Ein Passwort mit mindestens 16 Zeichen wählen und ausschließlich in Coolify hinterlegen; beispielsweise mit `openssl rand -hex 32` erzeugen und im Passwortmanager speichern.
 
-Als autorisierte Weiterleitungs-URI exakt eintragen:
-
-```text
-https://server.example-tailnet.ts.net/api/v1/auth/callback
-```
-
-Bei einer eigenen Domain stattdessen deren URL verwenden. Schema, Host und Pfad müssen exakt stimmen. Es ist kein zusätzlicher Android-OAuth-Client nötig: Die App nutzt den Browser-Login des Backends mit einem separaten PKCE-Einmalcode für die Rückkehr zu Android.
+Bei einem Update von der vorherigen Anmeldung `ADMIN_PASSWORD` neu hinzufügen. `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAIL` und `SESSION_SECRET` sind nicht mehr erforderlich und können aus Coolify entfernt werden. Vorhandene Datenbankpasswörter und das Datenvolume beibehalten. Nach dem Deployment erneut anmelden und die aktualisierte Android-App installieren.
 
 ## 3. Anwendung in Coolify anlegen
 
@@ -44,10 +38,7 @@ Der Grund: Auch `docker compose build` löst die Variablen der gesamten Compose-
 | Variable | Wert |
 | --- | --- |
 | `PUBLIC_URL` | `https://server.example-tailnet.ts.net` – kein Port, kein Pfad, kein abschließender Slash |
-| `ALLOWED_EMAIL` | Deine verifizierte Google-E-Mail-Adresse |
-| `GOOGLE_CLIENT_ID` | Client-ID der Google-Webanwendung |
-| `GOOGLE_CLIENT_SECRET` | Zugehöriges Client-Secret |
-| `SESSION_SECRET` | Eigenständiger zufälliger Wert mit mindestens 32 Zeichen |
+| `ADMIN_PASSWORD` | Persönliches Anmeldepasswort mit mindestens 16 Zeichen |
 | `POSTGRES_PASSWORD` | Eigenständiges zufälliges Passwort für den Datenbankadministrator |
 | `APP_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Kerndaten |
 | `HEALTH_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Gesundheitsdaten |
@@ -78,8 +69,8 @@ Bei bereits angelegten Variablen die Build-/Runtime-Einstellungen für jede Vari
    ```
 
    Falls auf diesem Tailscale-Gerätenamen bereits ein anderer Dienst auf HTTPS-Port 443 liegt, ihn nicht überschreiben. Einen separaten Tailscale-Knoten für Everything verwenden oder die bestehende Zuordnung gezielt anpassen. Die App erwartet eine eigene Basis-URL ohne Pfad.
-4. Die von Tailscale angezeigte HTTPS-Adresse muss exakt mit `PUBLIC_URL` und der Google-Weiterleitungs-URI übereinstimmen. Bei einer Korrektur die Werte ändern und in Coolify erneut deployen.
-5. Auf PC und Pixel Tailscale aktivieren, die HTTPS-Adresse öffnen und mit dem freigegebenen Google-Konto anmelden.
+4. Die von Tailscale angezeigte HTTPS-Adresse muss exakt mit `PUBLIC_URL` übereinstimmen. Bei einer Korrektur den Wert ändern und in Coolify erneut deployen.
+5. Auf PC und Pixel Tailscale aktivieren, die HTTPS-Adresse öffnen und mit deinem persönlichen Passwort anmelden.
 6. In Android unter Einstellungen dieselbe Basisadresse eintragen. Danach Health-Connect-Leseberechtigungen erteilen und Synchronisation aktivieren.
 
 Tailscale Serve benötigt den **Host-Port 3080**, nicht den internen Container-Port 3000. Bereits eingerichtete Coolify-Domains für andere Apps bleiben davon unberührt.
@@ -89,7 +80,7 @@ Tailscale Serve benötigt den **Host-Port 3080**, nicht den internen Container-P
 - Das benannte Volume `postgres` ist dauerhaft. Coolify kann seinen tatsächlichen Namen mit einer Ressourcenkennung versehen. Bei Redeployments dieselbe Anwendung und dasselbe Volume weiterverwenden.
 - Vor Nutzung mit echten Daten eine verschlüsselte Sicherung und Wiederherstellung auf einem separaten Testsystem prüfen. `ops/backup.sh` unterstützt Coolify über `BACKUP_STACK_ID`: Es findet genau den laufenden Datenbankcontainer mit dem entsprechenden Label, unabhängig von dessen wechselndem Coolify-Namen. Bei keinem oder mehreren Treffern bricht es ab.
 - Für den Backuptimer die Skripte wie im README unter `/opt/everything` auf dem Host bereitstellen und `age` installieren. In `/etc/everything-backup.env` **beide** Werte setzen: `AGE_RECIPIENT=age1...` und `BACKUP_STACK_ID=everything` (bzw. deinen in Coolify gesetzten Wert). Dann die mitgelieferten Systemd-Units aktivieren und einmal manuell ausführen. Ohne `BACKUP_STACK_ID` verwendet das Skript weiterhin die lokale `compose.yaml`. Verschlüsselte Sicherungen zusätzlich auf einen zweiten Host kopieren.
-- Zur Wiederherstellung den über das Label identifizierten `db`-Container verwenden: Dump mit `age` entschlüsseln, per `docker cp` als `/tmp/life.dump` hineinkopieren und `docker exec <db-container> pg_restore -U postgres -d life --clean --if-exists /tmp/life.dump` ausführen. Währenddessen Web und API in Coolify stoppen; zuerst in einer separaten Testinstanz prüfen. Anschließend Dumpdateien entfernen, Sitzungen mit `TRUNCATE core.sessions, core.login_codes` widerrufen und die Anwendung starten. Ein Volume-Snapshot ohne geprüfte Wiederherstellung ersetzt diesen Test nicht.
+- Zur Wiederherstellung den über das Label identifizierten `db`-Container verwenden: Dump mit `age` entschlüsseln, per `docker cp` als `/tmp/life.dump` hineinkopieren und `docker exec <db-container> pg_restore -U postgres -d life --clean --if-exists /tmp/life.dump` ausführen. Währenddessen Web und API in Coolify stoppen; zuerst in einer separaten Testinstanz prüfen. Anschließend Dumpdateien entfernen, Sitzungen mit `TRUNCATE core.sessions` widerrufen und die Anwendung starten. Ein Volume-Snapshot ohne geprüfte Wiederherstellung ersetzt diesen Test nicht.
 - Unter GitHub Actions zeigen die Prüfungen für API, Web, Android und das vollständige Docker-Deployment den Stand des gepushten Commits. Eine Debug-APK wird im Android-Job als Artifact bereitgestellt.
 - Nach Updates in Coolify deployen und `/api/v1/healthz`, Anmeldung und Datenanzeige prüfen. Die aktuelle Initialmigration legt Tabellen idempotent an; zukünftige Schemaänderungen benötigen explizite Migrationen. Alte Anwendungsversionen nicht ungeprüft gegen ein später geändertes Schema starten.
 
@@ -99,7 +90,7 @@ Nur wählen, wenn du die App absichtlich außerhalb des VPN erreichbar machen m�
 
 1. Einen eigenen Namen, z. B. `life.example.com`, per DNS auf den Coolify-Server zeigen lassen.
 2. In Coolify unter **Domains** ausschließlich den Dienst **`web`** wählen. HTTPS, Host `life.example.com` und internen Port **`3000`** einstellen. In Oberflächen mit einem gemeinsamen URL-Feld entspricht das `https://life.example.com:3000`.
-3. `PUBLIC_URL=https://life.example.com` setzen, **ohne `:3000`**. Googles Redirect-URI auf `https://life.example.com/api/v1/auth/callback` setzen. Neu deployen und TLS prüfen.
+3. `PUBLIC_URL=https://life.example.com` setzen, **ohne `:3000`**. Neu deployen und TLS prüfen.
 4. Für `api` und `db` keine Domains oder Host-Ports hinzufügen. `/api/...` läuft über den Web-Proxy zur API. Der private Loopback-Port kann bestehen bleiben; er wird dadurch nicht öffentlich.
 5. In Android die neue Basisadresse verwenden. Eine vorher eingerichtete Tailscale-Serve-Zuordnung zu dieser App wird für diesen Weg nicht benötigt.
 
@@ -107,11 +98,11 @@ Nur wählen, wenn du die App absichtlich außerhalb des VPN erreichbar machen m�
 
 | Fehler | Prüfung |
 | --- | --- |
-| `required variable ... is missing` oder `Defaulting to a blank string` beim Build | Alle acht Pflichtwerte unter Production gesetzt? Für jede Variable Build time **und** Runtime aktivieren, speichern und neu deployen. Runtime-only-Werte fehlen in `build-time.env`. |
+| `required variable ... is missing` oder `Defaulting to a blank string` beim Build | Alle fünf Pflichtwerte unter Production gesetzt? Für jede Variable Build time **und** Runtime aktivieren, speichern und neu deployen. Runtime-only-Werte fehlen in `build-time.env`. |
 | Coolify findet Compose nicht | Branch `main`, Base Directory `/`, Compose Location `/compose.coolify.yaml` |
 | Passwortauthentifizierung fehlgeschlagen | Stimmen Coolify-Werte und bereits initialisierte PostgreSQL-Rollen überein? |
-| Google `redirect_uri_mismatch` | Google-URI ist exakt `PUBLIC_URL` plus `/api/v1/auth/callback` |
-| Google verweigert dein Konto | Testnutzer freigegeben? `ALLOWED_EMAIL` identisch mit deiner verifizierten Google-Adresse? |
+| „Passwort ist falsch“ | Passwort exakt wie `ADMIN_PASSWORD` eingeben; nach Änderungen neu deployen |
+| Zu viele Anmeldeversuche | Eine Minute warten; die Begrenzung gilt gemeinsam für Web und Android |
 | „Ungültiger Ursprung“ beim Speichern | Browseradresse und `PUBLIC_URL` müssen identisch sein; nach Änderung erneut deployen |
 | Öffentlich „No available server“ | Domain an `web`, interner Port 3000, Web gesund, API und Datenbank gesund |
 | Private URL nicht erreichbar | Tailscale auf beiden Geräten aktiv, ACL erlaubt Zugriff, Serve zeigt auf Host-Port 3080 |

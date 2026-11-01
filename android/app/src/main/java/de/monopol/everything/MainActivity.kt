@@ -3,12 +3,10 @@ package de.monopol.everything
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
@@ -24,8 +24,6 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.MessageDigest
-import java.security.SecureRandom
 import java.time.*
 
 class MainActivity : ComponentActivity() {
@@ -48,36 +46,26 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) { App() }
             }
         }
-        receiveLogin(intent)
         if (store.get("token").isNotEmpty()) refresh(sync = true)
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receiveLogin(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); if (intent.action?.contains("PERMISSION") == true) screen = "Einstellungen" }
 
-    private fun receiveLogin(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme != "everything" || uri.host != "auth") return
-        val code = uri.getQueryParameter("code") ?: return
-        val verifier = store.get("verifier")
-        store.remove("verifier")
-        if (verifier.isBlank()) return
-        lifecycleScope.launch {
-            try {
-                val result = JSONObject(api.call("/auth/native/exchange", "POST", JSONObject().put("code", code).put("verifier", verifier)))
-                store.put("token", result.getString("access_token"))
-                refresh(sync = true)
-            } catch (e: Exception) { message = e.message ?: "Anmeldung fehlgeschlagen" }
-        }
-    }
-
-    private fun login() {
+    private fun login(password: String, onSuccess: () -> Unit) {
         try {
             val base = Uri.parse(store.get("server"))
             require(base.scheme == "https" && !base.host.isNullOrEmpty() && base.userInfo == null && base.query == null && (base.path.isNullOrEmpty() || base.path == "/")) { "Bitte die HTTPS-Basisadresse deines Servers eintragen." }
-            val verifier = Base64.encodeToString(ByteArray(48).also { SecureRandom().nextBytes(it) }, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
-            store.put("verifier", verifier)
-            val challenge = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
-            CustomTabsIntent.Builder().build().launchUrl(this, Uri.parse(store.get("server").trimEnd('/') + "/api/v1/auth/login?native_challenge=$challenge"))
+            require(password.length >= 16) { "Das Passwort benötigt mindestens 16 Zeichen." }
+            lifecycleScope.launch {
+                busy = true
+                try {
+                    val result = JSONObject(api.call("/auth/native/login", "POST", JSONObject().put("password", password)))
+                    store.put("token", result.getString("access_token"))
+                    onSuccess()
+                    refresh(sync = true)
+                } catch (e: Exception) { connected = false; message = e.message ?: "Anmeldung fehlgeschlagen" }
+                finally { busy = false }
+            }
         } catch (e: Exception) { message = e.message ?: "Anmeldung fehlgeschlagen" }
     }
 
@@ -197,19 +185,21 @@ class MainActivity : ComponentActivity() {
 
     @Composable private fun SettingsContent() {
         var server by remember { mutableStateOf(store.get("server")) }
+        var password by remember { mutableStateOf("") }
         var confirmDelete by remember { mutableStateOf(false) }
         Text("Private Verbindung", style = MaterialTheme.typography.titleMedium)
-        Text("Tailscale muss aktiv sein. Trage die HTTPS-Adresse ohne Pfad ein. Die Anmeldung öffnet deinen Systembrowser.")
+        Text("Trage die HTTPS-Adresse und dein persönliches Passwort ein. Bei privatem Zugriff muss Tailscale aktiv sein.")
         OutlinedTextField(server, { server = it }, label = { Text("https://dein-server.ts.net") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(password, { password = it }, label = { Text("Passwort") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
         Button(onClick = {
             val normalized = server.trim().trimEnd('/')
             if (normalized != store.get("server")) {
-                store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("verifier")
+                store.remove("token"); store.remove("cache"); store.remove("loaded")
                 store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
                 data = JSONObject(); connected = false
             }
-            store.put("server", normalized); login()
-        }) { Text("Mit Google anmelden") }
+            store.put("server", normalized); login(password) { password = "" }
+        }, enabled = !busy && password.length >= 16) { Text("Anmelden") }
         Text("Datenschutz", style = MaterialTheme.typography.titleMedium)
         Text("Gesundheitsdaten werden nur nach deiner Freigabe gelesen und als Tageswerte auf deinen Server übertragen. Der lokale Cache ist mit Android Keystore verschlüsselt. Android-Berechtigungen kannst du jederzeit in Health Connect widerrufen.")
         OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); data = JSONObject(); message = "Lokaler Cache gelöscht." }) { Text("Lokalen Cache löschen") }

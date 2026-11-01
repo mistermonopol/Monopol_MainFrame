@@ -31,13 +31,6 @@ class SessionToken(Base):
     expires: Mapped[float]
 
 
-class LoginCode(Base):
-    __tablename__ = "login_codes"
-    digest: Mapped[str] = mapped_column(String, primary_key=True)
-    challenge: Mapped[str] = mapped_column(String)
-    expires: Mapped[float]
-
-
 class HealthDay(HealthBase):
     __tablename__ = "days"
     day: Mapped[str] = mapped_column(String, primary_key=True)

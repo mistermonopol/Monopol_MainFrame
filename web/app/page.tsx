@@ -85,6 +85,8 @@ export default function Home() {
     [error, setError] = useState(""),
     [loaded, setLoaded] = useState(""),
     [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [editor, setEditor] = useState<{ kind: Kind; item?: Item } | null>(
     null,
   );
@@ -95,7 +97,10 @@ export default function Home() {
     });
     if (r.status === 401) {
       setAuth(false);
-      throw Error("Bitte mit deinem Google-Konto anmelden.");
+      const body = await r.json().catch(() => ({}));
+      throw Error(
+        typeof body.detail === "string" ? body.detail : "Bitte anmelden.",
+      );
     }
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
@@ -308,14 +313,49 @@ export default function Home() {
             </button>
           </div>
           {error && (
-            <div className="notice">
-              {error}{" "}
-              {!auth && (
-                <a href="/api/v1/auth/login">
-                  Mit Google anmelden <ArrowUpRight size={14} />
-                </a>
-              )}
+            <div className="notice" role="alert">
+              {error}
             </div>
+          )}
+          {!auth && (
+            <form
+              className="card loginform"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setSigningIn(true);
+                try {
+                  await request("/auth/login", {
+                    method: "POST",
+                    body: JSON.stringify({ password }),
+                  });
+                  setPassword("");
+                  await load();
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setSigningIn(false);
+                }
+              }}
+            >
+              <div>
+                <strong>Dein privater Workspace</strong>
+                <small>Melde dich mit deinem persönlichen Passwort an.</small>
+              </div>
+              <label htmlFor="login-password">Passwort</label>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                minLength={16}
+                maxLength={1024}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button className="primary" disabled={signingIn}>
+                {signingIn ? "Anmelden …" : "Anmelden"}
+              </button>
+            </form>
           )}
           {loaded && (
             <div className="sync">

@@ -1,26 +1,21 @@
 import hashlib
-import base64
-import re
+import hmac
 import secrets
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Literal
+from collections import deque
+from threading import Lock
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from authlib.integrations.starlette_client import OAuth
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field, AwareDatetime, model_validator
+from pydantic import BaseModel, Field, AwareDatetime, SecretStr, model_validator
 from sqlalchemy import select, delete, text
-from starlette.middleware.sessions import SessionMiddleware
 
 from .config import settings
-from .db import Session, HealthSession, Item, SessionToken, LoginCode, HealthDay, now
+from .db import Session, HealthSession, Item, SessionToken, HealthDay, now
 
 app = FastAPI(title="Everything API", version="1.0.0")
-app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
-                   https_only=settings.cookie_secure, same_site="lax")
 
 
 @app.middleware("http")
@@ -32,15 +27,17 @@ async def private_responses(request: Request, call_next):
     return response
 
 
-oauth = OAuth()
-oauth.register("google", client_id=settings.google_client_id,
-               client_secret=settings.google_client_secret,
-               server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-               client_kwargs={"scope": "openid email", "code_challenge_method": "S256"})
+password_salt = secrets.token_bytes(16)
+password_key = hashlib.scrypt(settings.admin_password.get_secret_value().encode(),
+                             salt=password_salt, n=16384, r=8, p=1)
+session_key = hashlib.sha256(settings.admin_password.get_secret_value().encode()).digest()
+login_failures = deque()
+login_lock = Lock()
 
 
 def digest(token):
-    return hashlib.sha256(token.encode()).hexdigest()
+    # Password changes invalidate sessions, including sessions from the old login.
+    return hmac.new(session_key, token.encode(), hashlib.sha256).hexdigest()
 
 
 def authenticated(request: Request):
@@ -64,65 +61,55 @@ def healthz():
     return {"status": "ok"}
 
 
-@app.get("/api/v1/auth/login")
-async def login(request: Request):
-    if not settings.google_client_id or not settings.allowed_email:
-        raise HTTPException(503, "Google-Anmeldung ist noch nicht konfiguriert")
-    request.session["code_verifier"] = secrets.token_urlsafe(48)
-    challenge = request.query_params.get("native_challenge")
-    if challenge and not re.fullmatch(r"[A-Za-z0-9_-]{43}", challenge):
-        raise HTTPException(400, "Ungültige PKCE-Challenge")
-    request.session["native_challenge"] = challenge
-    return await oauth.google.authorize_redirect(request, settings.public_url + "/api/v1/auth/callback",
-                                                  code_verifier=request.session["code_verifier"])
+class LoginInput(BaseModel):
+    password: SecretStr = Field(min_length=1, max_length=1024)
 
 
-@app.get("/api/v1/auth/callback")
-async def callback(request: Request):
-    try:
-        token = await oauth.google.authorize_access_token(request, code_verifier=request.session.pop("code_verifier", None))
-        identity = token["userinfo"]
-    except Exception:
-        raise HTTPException(401, "Anmeldung fehlgeschlagen")
-    if not identity.get("email_verified") or identity.get("email", "").casefold() != settings.allowed_email.casefold():
-        raise HTTPException(403, "Dieses Konto ist nicht freigegeben")
-    challenge = request.session.get("native_challenge")
-    request.session.clear()
-    if challenge:
-        code = secrets.token_urlsafe(48)
-        with Session.begin() as db:
-            db.add(LoginCode(digest=digest(code), challenge=challenge, expires=time.time() + 120))
-        return RedirectResponse("everything://auth?code=" + code)
+def verify_password(payload: LoginInput):
+    # One private account, one API process: a shared limit prevents IP spoofing
+    # through proxies from bypassing throttling. No passwords are persisted.
+    with login_lock:
+        clock = time.monotonic()
+        while login_failures and login_failures[0] <= clock - 60:
+            login_failures.popleft()
+        if len(login_failures) >= 5:
+            raise HTTPException(429, "Zu viele Anmeldeversuche. Bitte in einer Minute erneut versuchen.",
+                                headers={"Retry-After": "60"})
+        candidate = hashlib.scrypt(payload.password.get_secret_value().encode(),
+                                   salt=password_salt, n=16384, r=8, p=1)
+        if not hmac.compare_digest(candidate, password_key):
+            login_failures.append(clock)
+            raise HTTPException(401, "Passwort ist falsch")
+        login_failures.clear()
+
+
+def create_session():
     raw = secrets.token_urlsafe(48)
     with Session.begin() as db:
         db.add(SessionToken(digest=digest(raw), expires=time.time() + 86400 * 7))
-    response = RedirectResponse("/")
+    return raw
+
+
+@app.post("/api/v1/auth/login")
+def login(payload: LoginInput, request: Request, response: Response):
+    if request.headers.get("origin") != settings.public_url.rstrip("/"):
+        raise HTTPException(403, "Ungültiger Ursprung")
+    verify_password(payload)
+    raw = create_session()
     response.set_cookie("life_session", raw, httponly=True, secure=settings.cookie_secure,
                         samesite="lax", max_age=86400 * 7, path="/")
-    return response
+    return {"ok": True}
 
 
-class NativeExchange(BaseModel):
-    code: str = Field(min_length=43, max_length=128)
-    verifier: str = Field(min_length=43, max_length=128)
-
-
-@app.post("/api/v1/auth/native/exchange")
-def native_exchange(payload: NativeExchange):
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(payload.verifier.encode()).digest()).decode().rstrip("=")
-    with Session.begin() as db:
-        code = db.scalar(select(LoginCode).where(LoginCode.digest == digest(payload.code)).with_for_update())
-        if not code or code.expires < time.time() or not secrets.compare_digest(code.challenge, challenge):
-            raise HTTPException(401, "Anmeldecode abgelaufen oder ungültig")
-        db.delete(code)
-        raw = secrets.token_urlsafe(48)
-        db.add(SessionToken(digest=digest(raw), expires=time.time() + 86400 * 7))
-    return {"access_token": raw, "expires_in": 86400 * 7, "token_type": "Bearer"}
+@app.post("/api/v1/auth/native/login")
+def native_login(payload: LoginInput):
+    verify_password(payload)
+    return {"access_token": create_session(), "expires_in": 86400 * 7, "token_type": "Bearer"}
 
 
 @app.get("/api/v1/session", dependencies=[Depends(authenticated)])
 def session_info():
-    return {"email": settings.allowed_email}
+    return {"name": "Mein Life OS"}
 
 
 @app.post("/api/v1/auth/logout")

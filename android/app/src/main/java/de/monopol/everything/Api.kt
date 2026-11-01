@@ -19,7 +19,7 @@ class Api(private val store: Store) {
             .method(method, if (method == "GET") null else (body?.toString() ?: "").toRequestBody("application/json".toMediaType())).build()
         client.newCall(request).execute().use { response ->
             val text = response.body?.string() ?: "{}"
-            if (response.code == 401) throw IllegalStateException("Sitzung abgelaufen. Bitte erneut anmelden.")
+            if (response.code == 401) throw IllegalStateException(if (path == "/auth/native/login") "Passwort ist falsch" else "Sitzung abgelaufen. Bitte erneut anmelden.")
             if (response.code == 409) throw IllegalStateException("Eintrag wurde geändert. Bitte neu laden.")
             if (!response.isSuccessful) throw IllegalStateException(runCatching { JSONObject(text).optString("detail", "Serverfehler ${response.code}") }.getOrDefault("Serverfehler ${response.code}"))
             text

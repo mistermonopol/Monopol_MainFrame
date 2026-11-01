@@ -1,4 +1,38 @@
 import { test, expect } from "@playwright/test";
+
+test("password login opens the workspace without an external provider", async ({
+  page,
+}) => {
+  let loggedIn = false;
+  await page.route("**/api/v1/**", async (route) => {
+    if (route.request().url().endsWith("/auth/login")) {
+      expect(route.request().postDataJSON()).toEqual({
+        password: "my-private-password-2026",
+      });
+      loggedIn = true;
+      return route.fulfill({ json: { ok: true } });
+    }
+    if (!loggedIn)
+      return route.fulfill({ status: 401, json: { detail: "Bitte anmelden" } });
+    return route.fulfill({
+      json: {
+        tasks: [],
+        notes: [],
+        events: [],
+        health: { days: [], last_sync: null },
+      },
+    });
+  });
+  await page.goto("/");
+  await page
+    .getByLabel("Passwort", { exact: true })
+    .fill("my-private-password-2026");
+  await page.getByRole("button", { name: "Anmelden", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Neue Aufgabe", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByLabel("Passwort", { exact: true })).toHaveCount(0);
+});
 test.beforeEach(({ page }) => {
   page.on("pageerror", (error) =>
     console.error("Browser error:", error.message),
