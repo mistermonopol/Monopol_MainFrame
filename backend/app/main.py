@@ -152,13 +152,14 @@ class ItemInput(BaseModel):
 
 
 def check_kind(kind):
-    if kind not in {"tasks", "notes", "events"}:
+    if kind not in {"tasks", "notes", "events", "music"}:
         raise HTTPException(404, "Unbekannter Bereich")
 
 
 def item_data(kind, data):
     fields = {"tasks": {"title", "description", "due", "completed"},
               "notes": {"title", "description"},
+              "music": {"title", "description", "due", "completed", "location"},
               "events": {"title", "description", "start", "end", "location"}}
     if kind == "events" and (not data.start or not data.end):
         raise HTTPException(422, "Beginn und Ende fehlen")
@@ -276,4 +277,9 @@ def clear_health():
 @app.get("/api/v1/dashboard", dependencies=[Depends(authenticated)])
 def dashboard():
     return {"tasks": list_items("tasks"), "notes": list_items("notes"),
-            "events": list_items("events"), "health": health_days()}
+            "events": list_items("events"), "music": list_items("music"), "health": health_days()}
+
+
+# Authentication and CSRF checks apply to every integration route.
+from .integrations import router as integrations_router
+app.include_router(integrations_router, prefix="/api/v1", dependencies=[Depends(authenticated)])

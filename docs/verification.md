@@ -2,8 +2,8 @@
 
 Lokal erfolgreich ausgeführt:
 
-- **15 API-Tests**, mit getrennten SQLite-Datenbanken: Passwort-Anmeldung, sichere Cookies, Logout, Begrenzung falscher Anmeldeversuche, frühere Sitzungen, Origin-Prüfung, CRUD, Versionskonflikte, Gesundheitsimporte und Fehlermeldungen auf Englisch bzw. Deutsch.
-- **20 Playwright-Prüfungen**, Desktop und Pixel-Viewport: bisherige Abläufe, Navigation, Sprach- und Themewechsel mit gespeicherter Auswahl, eckige Bedienelemente, alle Diagrammansichten sowie Aggregationsfälle für fehlende Werte, gemessene Nullen, doppelte Tage und Wochen-/Jahresgrenzen. API-Antworten werden gezielt simuliert; sechs Prüfläufe testen die reine Aggregation.
+- **19 API-Tests**, mit getrennten SQLite-Datenbanken: Passwort-Anmeldung, sichere Cookies, Logout, Begrenzung falscher Anmeldeversuche, frühere Sitzungen, Origin-Prüfung, CRUD, Versionskonflikte, Gesundheitsimporte und Fehlermeldungen auf Englisch bzw. Deutsch.
+- **22 Playwright-Prüfungen**, Desktop und Pixel-Viewport: bisherige Abläufe, Navigation, Sprach- und Themewechsel mit gespeicherter Auswahl, eckige Bedienelemente, alle Diagrammansichten sowie Aggregationsfälle für fehlende Werte, gemessene Nullen, doppelte Tage und Wochen-/Jahresgrenzen. API-Antworten werden gezielt simuliert; sechs Prüfläufe testen die reine Aggregation.
 - **Next.js-Produktionsbuild** mit TypeScript-Prüfung.
 - **Android Debug-APK** erfolgreich kompiliert und paketiert; **6 Kotlin-Unit-Tests** für Schlafintervalle, Sommerzeit, Schritt-Aggregation und Übersetzungen erfolgreich.
 - **Docker-Compose-Konfiguration** gegen `.env.example` validiert.
@@ -21,3 +21,9 @@ Noch nicht lokal nachgewiesen:
 - Verschlüsseltes Backup und erfolgreiche Wiederherstellung: Skript, Systemd-Timer und Anleitung sind vorhanden; der Wiederherstellungstest muss vor Betriebsfreigabe auf einem separaten System erfolgen.
 
 Eine Warnung des Python-Testclients weist auf die künftige Migration von `httpx` zu `httpx2` hin; sie beeinträchtigt die erfolgreichen API-Tests nicht.
+
+## Version 0.5: Themes und neue Module
+
+19 Backend-Tests einschließlich Musik-CRUD, Versionskonflikten, Vault-Pfadgrenzen, extern geänderten Markdown-Dateien, geschützten Integrationsrouten und einem zweistufigen Agentenaufruf mit echtem App-Kontext und simuliertem KI-Anbieter. 22 Playwright-Prüfungen einschließlich aller vier Theme-Auswahlen, gespeicherter Auswahl, Musikprojekt, Agentenchat und Vault-Bearbeitung auf Desktop und Mobilgerät erfolgreich. Android-APK und sechs bestehende Unit-Tests erfolgreich gebaut. Die vier Web-Themes und mobile Agentenansicht wurden mit klaren Vorschaudaten visuell geprüft. Compose-Konfigurationen validiert; Docker-Stack lokal weiterhin nicht gestartet.
+
+Eine echte Anbieterantwort und der Zugriff auf den persönlichen Obsidian-Vault sind noch nicht nachgewiesen: API-Konfiguration und Server-Vault werden vom Besitzer eingerichtet. Der Agent liest Daten; Änderungen erfolgen über die direkten Moduloberflächen. Kein automatischer PC-Vault-Sync und keine Spotify-/DistroKid-Verbindung. Native Oberfläche zusätzlich am echten Pixel prüfen.

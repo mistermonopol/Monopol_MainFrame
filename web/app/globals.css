@@ -1436,3 +1436,551 @@ svg rect {
     visibility: hidden;
   }
 }
+
+[data-theme="amber"] {
+  --c-0005: #000000;
+  --c-070610b3: #100c06;
+  --c-090611c7: #110d06;
+  --c-11101d: #1d1810;
+  --c-131120: #201a11;
+  --c-171524: #241e15;
+  --c-18162a: #2a2316;
+  --c-1b192d: #2d2619;
+  --c-1e1530: #302615;
+  --c-201c32: #322a1c;
+  --c-211c34: #342b1c;
+  --c-242038: #382f20;
+  --c-292238: #383022;
+  --c-29223e: #3e3422;
+  --c-2b2d4c: #4c402b;
+  --c-30233e: #3e3423;
+  --c-30253e: #3e3525;
+  --c-302641: #413726;
+  --c-302642: #423826;
+  --c-30281f: #302a1f;
+  --c-302942: #423929;
+  --c-342640: #403626;
+  --c-342a49: #493e2a;
+  --c-34304c: #4c4230;
+  --c-352747: #473b27;
+  --c-352b4c: #4c402b;
+  --c-382b50: #50422b;
+  --c-3a2949: #493d29;
+  --c-3e2e42: #423b2e;
+  --c-4a3a63: #63543a;
+  --c-4a3e62: #62553e;
+  --c-514061: #615540;
+  --c-514165: #655841;
+  --c-53346a55: #6a5634;
+  --c-58406e: #6e5d40;
+  --c-614973: #736349;
+  --c-654380: #806943;
+  --c-654d96: #967b4d;
+  --c-655136: #655436;
+  --c-665383: #837153;
+  --c-68597f: #7f7159;
+  --c-6d518a: #8a7551;
+  --c-77578d: #8d7957;
+  --c-78668f: #918064;
+  --c-80629f60: #9f8862;
+  --c-8e66ab: #ab9166;
+  --c-8f82aa: #aa9b82;
+  --c-9986a7: #a99b84;
+  --c-9986ad: #ad9f86;
+  --c-9a89af: #afa189;
+  --c-9b7cbb: #bba47c;
+  --c-9d72d90a: #d9b372;
+  --c-a491c1: #c1af91;
+  --c-a49bb9: #b9ae9b;
+  --c-a996bd: #bdaf96;
+  --c-ad72e51c: #e5ba72;
+  --c-b2a2c3: #c3b7a2;
+  --c-b3abc5: #c5bbab;
+  --c-b49ad5: #d5bf9a;
+  --c-b4a3c8: #c8baa3;
+  --c-b4a8c5: #c5baa8;
+  --c-b585e126: #e1bf85;
+  --c-b59aef: #efd09a;
+  --c-b5b8ef: #efdab5;
+  --c-b69af7: #f7d59a;
+  --c-b8a2d2: #d2c0a2;
+  --c-b9a5cc: #ccbea5;
+  --c-c0b1cf: #cfc4b1;
+  --c-c3aadd: #ddcaaa;
+  --c-c4aff2: #f2d9af;
+  --c-c5bbd7: #d7cdbb;
+  --c-c6b0df: #dfceb0;
+  --c-c6b2db: #dbccb2;
+  --c-c7a7ff: #fddea9;
+  --c-c7b0f8: #f8ddb0;
+  --c-c9bfdc: #dcd1bf;
+  --c-cab0ff: #fde1b2;
+  --c-cbb7e9: #e9d6b7;
+  --c-d0afea: #ead4af;
+  --c-d0b7ff: #fde4b9;
+  --c-d1b7f6: #f6dfb7;
+  --c-d4bce7: #e7d7bc;
+  --c-d6b9ff: #fde5bb;
+  --c-dac5ff: #fee9c6;
+  --c-dec8ff: #feeac9;
+  --c-deccf8: #f8e8cc;
+  --c-deceff: #feedcf;
+  --c-e0c5ff: #fee9c6;
+  --c-e6b9d5: #e6d5b9;
+  --c-edbf82: #edc582;
+  --c-edc894: #edcc94;
+  --c-eee9fb: #fbf4e9;
+  --c-f1acae: #f1d7ac;
+  --c-fff: #ffffff;
+}
+
+[data-theme="cyan"] {
+  --c-0005: #000000;
+  --c-070610b3: #060f10;
+  --c-090611c7: #061011;
+  --c-11101d: #101c1d;
+  --c-131120: #111f20;
+  --c-171524: #152324;
+  --c-18162a: #16292a;
+  --c-1b192d: #192c2d;
+  --c-1e1530: #152e30;
+  --c-201c32: #1c3132;
+  --c-211c34: #1c3334;
+  --c-242038: #203738;
+  --c-292238: #223738;
+  --c-29223e: #223c3e;
+  --c-2b2d4c: #2b4a4c;
+  --c-30233e: #233c3e;
+  --c-30253e: #253c3e;
+  --c-302641: #263f41;
+  --c-302642: #264042;
+  --c-30281f: #1f2f30;
+  --c-302942: #294042;
+  --c-342640: #263e40;
+  --c-342a49: #2a4749;
+  --c-34304c: #304a4c;
+  --c-352747: #274547;
+  --c-352b4c: #2b4a4c;
+  --c-382b50: #2b4e50;
+  --c-3a2949: #294749;
+  --c-3e2e42: #2e4142;
+  --c-4a3a63: #3a6163;
+  --c-4a3e62: #3e6062;
+  --c-514061: #405f61;
+  --c-514165: #416365;
+  --c-53346a55: #34676a;
+  --c-58406e: #406b6e;
+  --c-614973: #497073;
+  --c-654380: #437c80;
+  --c-654d96: #4d9296;
+  --c-655136: #366265;
+  --c-665383: #538083;
+  --c-68597f: #597d7f;
+  --c-6d518a: #51878a;
+  --c-77578d: #578a8d;
+  --c-78668f: #648e91;
+  --c-80629f60: #629b9f;
+  --c-8e66ab: #66a7ab;
+  --c-8f82aa: #82a8aa;
+  --c-9986a7: #84a7a9;
+  --c-9986ad: #86abad;
+  --c-9a89af: #89adaf;
+  --c-9b7cbb: #7cb7bb;
+  --c-9d72d90a: #72d3d9;
+  --c-a491c1: #91bec1;
+  --c-a49bb9: #9bb7b9;
+  --c-a996bd: #96bbbd;
+  --c-ad72e51c: #72dee5;
+  --c-b2a2c3: #a2c1c3;
+  --c-b3abc5: #abc3c5;
+  --c-b49ad5: #9ad1d5;
+  --c-b4a3c8: #a3c6c8;
+  --c-b4a8c5: #a8c3c5;
+  --c-b585e126: #85dbe1;
+  --c-b59aef: #9aeaef;
+  --c-b5b8ef: #b5ecef;
+  --c-b69af7: #9af1f7;
+  --c-b8a2d2: #a2cfd2;
+  --c-b9a5cc: #a5cacc;
+  --c-c0b1cf: #b1cdcf;
+  --c-c3aadd: #aadadd;
+  --c-c4aff2: #afeef2;
+  --c-c5bbd7: #bbd5d7;
+  --c-c6b0df: #b0dcdf;
+  --c-c6b2db: #b2d9db;
+  --c-c7a7ff: #a9f8fd;
+  --c-c7b0f8: #b0f4f8;
+  --c-c9bfdc: #bfdadc;
+  --c-cab0ff: #b2f9fd;
+  --c-cbb7e9: #b7e6e9;
+  --c-d0afea: #afe6ea;
+  --c-d0b7ff: #b9f9fd;
+  --c-d1b7f6: #b7f2f6;
+  --c-d4bce7: #bce4e7;
+  --c-d6b9ff: #bbf9fd;
+  --c-dac5ff: #c6fafe;
+  --c-dec8ff: #c9fafe;
+  --c-deccf8: #ccf5f8;
+  --c-deceff: #cffbfe;
+  --c-e0c5ff: #c6fafe;
+  --c-e6b9d5: #b9e3e6;
+  --c-edbf82: #82e7ed;
+  --c-edc894: #94e8ed;
+  --c-eee9fb: #e9fafb;
+  --c-f1acae: #acedf1;
+  --c-fff: #ffffff;
+}
+
+/* Four visual systems, all deliberately rectangular. */
+[data-theme="dark"] .hero {
+  background: linear-gradient(125deg, var(--panel), var(--accent-soft));
+  border-left: 4px solid var(--accent);
+}
+[data-theme="amber"] {
+  --bg: #100e09;
+  --panel: #1d190f;
+  --sidebar: #141108;
+  --line: #5c4822;
+  --text: #ffdda0;
+  --muted: #c3ab7d;
+  --accent: #ffc14a;
+  --accent-soft: #372b13;
+}
+[data-theme="amber"] main {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    #ffb00005 4px
+  );
+}
+[data-theme="amber"] .card {
+  border-style: dashed;
+  box-shadow: 3px 3px 0 #0006;
+}
+[data-theme="amber"] .hero h2 {
+  text-transform: uppercase;
+  letter-spacing: -2px;
+}
+[data-theme="cyan"] {
+  --bg: #06151d;
+  --panel: #0b232e;
+  --sidebar: #071b25;
+  --line: #245264;
+  --text: #dbf8ff;
+  --muted: #8db8c8;
+  --accent: #52e5ee;
+  --accent-soft: #103944;
+}
+[data-theme="cyan"] main {
+  background-image:
+    linear-gradient(#52e5ee06 1px, transparent 1px),
+    linear-gradient(90deg, #52e5ee06 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+[data-theme="cyan"] .card {
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 8px 24px #0002;
+}
+[data-theme="cyan"] .hero {
+  background: linear-gradient(110deg, #0b2538, #0b3a42);
+}
+[data-theme="light"] .card {
+  box-shadow: 4px 4px 0 var(--line);
+}
+[data-theme="light"] .hero {
+  background: var(--panel);
+  border-left: 5px solid var(--accent);
+}
+.module-workspace {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.module-banner {
+  padding: 28px;
+  border: 1px solid var(--line);
+  background: linear-gradient(120deg, var(--accent-soft), var(--panel));
+  position: relative;
+  overflow: hidden;
+}
+.module-banner:after {
+  content: "";
+  position: absolute;
+  right: -50px;
+  top: -80px;
+  width: 240px;
+  height: 240px;
+  border: 30px double var(--line);
+  transform: rotate(30deg);
+  pointer-events: none;
+  opacity: 0.4;
+}
+.module-number {
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 3px;
+}
+.module-banner > div {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin: 20px 0;
+  position: relative;
+  z-index: 1;
+}
+.module-banner h2 {
+  margin: 0;
+  font-size: clamp(21px, 3vw, 34px);
+  letter-spacing: -1px;
+  max-width: 680px;
+}
+.module-banner p {
+  color: var(--muted);
+  max-width: 740px;
+  position: relative;
+  z-index: 1;
+}
+.module-shortcuts {
+  display: grid;
+  gap: 8px;
+  margin-top: 28px;
+}
+.module-shortcuts button {
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  padding: 14px;
+  background: var(--bg);
+}
+.module-shortcuts strong {
+  color: var(--accent);
+  margin-right: auto;
+  font-size: 20px;
+}
+.signal-panel {
+  background: var(--accent-soft);
+}
+.music-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
+}
+.music-project {
+  display: block;
+  text-align: left;
+  padding: 18px;
+  position: relative;
+  min-width: 0;
+}
+.music-project h3,
+.music-project p {
+  overflow-wrap: anywhere;
+}
+.music-project p {
+  color: var(--muted);
+  max-height: 64px;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.music-project > svg {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+}
+.track-art {
+  height: 160px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, var(--accent-soft), var(--bg));
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  color: var(--accent);
+}
+.track-art > span {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.waveform {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  align-items: end;
+  padding: 0 12px;
+  opacity: 0.3;
+}
+.waveform i {
+  flex: 1;
+  background: var(--accent);
+}
+.module-form {
+  display: grid;
+  gap: 16px;
+}
+.module-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+}
+.module-form input,
+.module-form textarea,
+.chat-composer textarea,
+.vault-index input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.module-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.module-form textarea {
+  resize: vertical;
+}
+.module-form button,
+.module-actions button {
+  padding: 12px;
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+.module-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.agent-console {
+  padding: 22px;
+  min-width: 0;
+}
+.console-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--accent);
+  flex-wrap: wrap;
+}
+.console-status > span:last-child {
+  margin-left: auto;
+  color: var(--muted);
+}
+.agent-disclosure {
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+.chat-history {
+  min-height: 320px;
+  max-height: 620px;
+  overflow: auto;
+  padding: 16px 0;
+}
+.chat-welcome {
+  padding: 36px 8px;
+  color: var(--accent);
+}
+.prompt-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.prompt-grid button {
+  border: 1px solid var(--line);
+  padding: 14px;
+  color: var(--text);
+  text-align: left;
+  max-width: 240px;
+  font-size: 12px;
+}
+.chat-message {
+  padding: 16px;
+  margin: 12px 0;
+  background: var(--bg);
+  border-left: 2px solid var(--accent);
+  overflow-wrap: anywhere;
+}
+.chat-message.user {
+  margin-left: 10%;
+  border-left: 2px solid var(--line);
+  background: var(--accent-soft);
+}
+.chat-message p {
+  white-space: pre-wrap;
+  margin: 8px 0;
+}
+.chat-composer {
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.chat-composer textarea {
+  resize: vertical;
+}
+.chat-composer button {
+  padding: 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+.vault-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.vault-index {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  max-height: 800px;
+  overflow: auto;
+}
+.vault-index button {
+  justify-content: flex-start;
+  text-align: left;
+  padding: 10px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.vault-index button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.vault-editor textarea {
+  line-height: 1.65;
+  tab-size: 2;
+}
+@media (max-width: 800px) {
+  .vault-layout {
+    grid-template-columns: 1fr;
+  }
+  .vault-index {
+    max-height: 250px;
+  }
+  .module-banner {
+    padding: 20px;
+  }
+  .chat-composer {
+    flex-direction: column;
+  }
+  .music-grid {
+    grid-template-columns: 1fr;
+  }
+  .module-banner:after {
+    opacity: 0.15;
+  }
+}

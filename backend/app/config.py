@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     public_url: str = "http://localhost:3000"
     admin_password: SecretStr = Field(min_length=16, max_length=1024)
     cookie_secure: bool = True
+    ai_base_url: str = ""
+    ai_model: str = ""
+    ai_api_key: SecretStr = SecretStr("")
+    obsidian_vault_path: str = ""
 
 
 settings = Settings()

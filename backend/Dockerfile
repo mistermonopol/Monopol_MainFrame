@@ -5,5 +5,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN useradd --system --uid 10001 life
+RUN mkdir -p /vault && chown life /vault
 USER life
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

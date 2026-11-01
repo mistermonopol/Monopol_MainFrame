@@ -1,5 +1,39 @@
 # Deployment auf monopol-ai.de mit Coolify
 
+## Musik, KI-Agent und Obsidian (Version 0.5)
+
+Unter Einstellungen stehen **Violet Mainframe**, **Paper Studio**, **Amber Terminal** und **Cyan Grid** bereit. Sprache und Theme werden pro Gerät gespeichert. Kalender und alte Notizen sind aus der Navigation entfernt; ihre Daten bleiben erhalten und sind im Agentenkontext enthalten. Das Musikmodul verwaltet eigene Projekte mit Beschreibung, Release-Datum, Link/Dateipfad und Veröffentlichungsstatus. Es verbindet keine Künstler-Dashboards automatisch.
+
+### Agent aktivieren
+
+In Coolify folgende optionale Variablen setzen, jeweils für **Build time und Runtime**, anschließend redeployen:
+
+| Variable | Inhalt |
+| --- | --- |
+| `AI_BASE_URL` | Basisadresse einer erreichbaren Chat-Completions-API, einschließlich `/v1`, ohne `/chat/completions` |
+| `AI_MODEL` | Modell-ID beim Anbieter; das Modell muss Function/Tool Calling unterstützen |
+| `AI_API_KEY` | Anbieter-Schlüssel; bei einer lokalen API ohne Authentifizierung leer lassen |
+
+Beispiel für Ollama im selben Docker-Netz: `AI_BASE_URL=http://ollama:11434/v1`, `AI_MODEL=<Name des bereits geladenen toolfähigen Modells>`. `localhost` im API-Container bezeichnet den Container selbst, nicht deinen PC oder einen anderen Dienst. Siehe [Ollamas offizielle Kompatibilitätsdokumentation](https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx).
+
+Beim Absenden einer Nachricht übermittelt das Backend den aktuellen Bestand aus Aufgaben, Musikprojekten, bisherigen Notizen/Terminen und Gesundheitswerten an diesen Anbieter. Der Agent hat **Lesezugriff**, kann gezielt Obsidian-Notizen nachladen und führt keine Schreib-, Shell- oder Bankaktionen aus. Schlüssel und Login-Passwort werden nicht als Kontext mitgesendet. Der Chat bleibt im Arbeitsspeicher des jeweiligen Clients, nicht dauerhaft in der App-Datenbank. Datenverarbeitung beim KI-Anbieter richtet sich nach dessen Bedingungen.
+
+Ohne API-Konfiguration bleibt der Rest der App nutzbar. Testaufrufe sind mit gemocktem Anbieter geprüft; eine echte Verbindung benötigt deine Werte. Grenzen: 30 Chatnachrichten pro Anfrage, 12.000 Zeichen pro Nachricht, 180.000 Zeichen App-Kontext, fünf Provider-Runden mit höchstens acht Note-Abfragen je Runde. Pro gelesener Notiz werden maximal 30.000 Zeichen an die KI geschickt und Kürzungen markiert.
+
+### Obsidian-Vault verbinden
+
+Der Dienst `api` bekommt ein **persistentes Docker-Volume `obsidian` unter `/vault`**; Coolify setzt `OBSIDIAN_VAULT_PATH=/vault` bereits in Compose. Der neue Tab kann dort Markdown-Notizen erstellen, lesen, suchen und bearbeiten. Änderungen werden atomar geschrieben; hat Obsidian eine Datei inzwischen geändert, muss sie vor dem Speichern neu geladen werden. Bis zu 2.000 `.md`-Dateien werden gelistet, je Datei maximal 200 KB. Versteckte Konfigurationsordner und symbolische Links bleiben ausgeschlossen. Kein Löschen von Vault-Dateien über die App.
+
+Dein Vault auf dem PC wird **nicht automatisch** mit diesem Volume synchronisiert. Für denselben Bestand:
+
+1. Einen eigenen Vault-Ordner auf dem Coolify-Server bereitstellen und bestehende Markdown-Dateien dorthin kopieren bzw. mit deinem vorhandenen Dateisync aktuell halten.
+2. In der Compose-Konfiguration beim Dienst `api` den Eintrag `obsidian:/vault` durch einen Bind Mount wie `/srv/monopol-vault:/vault` ersetzen. Dazu einen Compose-Override oder einen eigenen Deployment-Branch verwenden, damit Updates die Anpassung erhalten. Den Ordner vorher anlegen; Container-UID **10001** benötigt Lese- und Schreibrechte. Keine pauschalen Rechte für andere Benutzer vergeben.
+3. Redeployen und eine Testnotiz im Obsidian-Tab öffnen, ändern und anschließend im Serverordner prüfen.
+
+Bei reinem API-Start außerhalb Compose `OBSIDIAN_VAULT_PATH` auf einen vorhandenen Ordner setzen. App-Zugriff auf den Vault verwendet dieselbe Anmeldung wie alle anderen Module. Finanz-/Gesundheitsdaten bleiben in den bisherigen Datenbanken; der Vault ist ein zusätzlicher Dateibestand. Das bestehende Datenbank-Backup sichert den Vault **nicht** mit: diesen Ordner bzw. das Volume separat verschlüsselt sichern.
+
+Bestehende Deployments einmal redeployen, damit das neue Volume und die optionalen Variablen geladen werden. Keine Datenbank zurücksetzen, keine Volumes löschen.
+
 `compose.coolify.yaml` baut Web, API und PostgreSQL gemeinsam. Web und Android verwenden **https://monopol-ai.de** und deine persönliche Passwort-Anmeldung. Eine zusätzliche Netzwerk-App wird nicht benötigt.
 
 ## 1. DNS und Domain

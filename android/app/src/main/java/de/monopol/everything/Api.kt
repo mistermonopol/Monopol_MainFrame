@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 class Api(private val store: Store) {
     private fun t(source: String) = Localizer.text(source,store.get("language").ifBlank { "en" })
-    private val client = OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).followRedirects(false).build()
+    private val client = OkHttpClient.Builder().callTimeout(75, TimeUnit.SECONDS).followRedirects(false).build()
     suspend fun call(path: String, method: String = "GET", body: JSONObject? = null): String = withContext(Dispatchers.IO) {
         val server = store.get("server").trimEnd('/')
         require(server.startsWith("https://")) { t("Bitte eine HTTPS-Serveradresse eintragen.") }

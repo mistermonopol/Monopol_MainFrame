@@ -2,7 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Language, Theme, localeFor, translator, slogan } from "./i18n";
 import StepChart from "./StepChart";
+import WorkspaceModules from "./WorkspaceModules";
 import {
+  Music,
+  Bot,
+  Gem,
   LayoutDashboard,
   CheckSquare,
   NotebookPen,
@@ -68,8 +72,9 @@ export default function Home() {
   const navigation = [
     ["dashboard", t("Übersicht"), LayoutDashboard],
     ["tasks", t("Aufgaben"), CheckSquare],
-    ["notes", t("Notizen"), NotebookPen],
-    ["events", t("Kalender"), CalendarDays],
+    ["music", t("Musik"), Music],
+    ["agent", t("KI-Agent"), Bot],
+    ["obsidian", "Obsidian", Gem],
     ["health", t("Gesundheit"), HeartPulse],
     ["settings", t("Einstellungen"), Settings],
   ] as const;
@@ -96,7 +101,11 @@ export default function Home() {
         localStorage.getItem("monopol-language") === "de" ? "de" : "en",
       );
       setTheme(
-        localStorage.getItem("monopol-theme") === "light" ? "light" : "dark",
+        (["dark", "light", "amber", "cyan"].includes(
+          localStorage.getItem("monopol-theme") || "",
+        )
+          ? localStorage.getItem("monopol-theme")
+          : "dark") as Theme,
       );
     } catch {}
     setPreferencesReady(true);
@@ -274,11 +283,6 @@ export default function Home() {
         new Date(),
       ),
   );
-  const upcoming = data.events
-    .filter((e) => e.end && new Date(e.end) > new Date())
-    .sort(
-      (a, b) => new Date(a.start!).getTime() - new Date(b.start!).getTime(),
-    );
   const enabled = online && auth;
   function taskRow(task: Item) {
     return (
@@ -471,27 +475,16 @@ export default function Home() {
                 {t("Mach Platz für das, was zählt.")}
               </p>
             </div>
-            <button
-              className="primary"
-              disabled={!enabled}
-              onClick={() =>
-                setEditor({
-                  kind:
-                    page === "notes"
-                      ? "notes"
-                      : page === "events"
-                        ? "events"
-                        : "tasks",
-                })
-              }
-            >
-              <Plus size={17} />{" "}
-              {page === "notes"
-                ? t("Neue Notiz")
-                : page === "events"
-                  ? t("Neuer Termin")
-                  : t("Neue Aufgabe")}
-            </button>
+            {(page === "dashboard" || page === "tasks") && (
+              <button
+                className="primary"
+                disabled={!enabled}
+                onClick={() => setEditor({ kind: "tasks" })}
+              >
+                <Plus size={17} />
+                {t("Neue Aufgabe")}
+              </button>
+            )}
           </div>
           {error && (
             <div className="notice" role="alert">
@@ -558,7 +551,7 @@ export default function Home() {
                     <span>{t("Mehr Überblick.")}</span>
                   </h2>
                   <p>
-                    {t("Deine Aufgaben, Termine und Gesundheit.")}
+                    {t("Deine Aufgaben, Musik und Gesundheit.")}
                     <br />
                     {t("Ein ruhiger Ort für alles, was dich bewegt.")}
                   </p>
@@ -580,10 +573,10 @@ export default function Home() {
                     <CheckSquare />
                   </span>
                   <span className="orbitnode n3">
-                    <CalendarDays />
+                    <Music />
                   </span>
                   <span className="orbitnode n4">
-                    <NotebookPen />
+                    <Bot />
                   </span>
                 </div>
               </section>
@@ -674,48 +667,29 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                <div className="card panel">
-                  <div className="paneltitle">
-                    <h3>
-                      <CalendarDays size={18} />
-                      {t("Als Nächstes")}
-                    </h3>
-                    <button onClick={() => setPage("events")}>
-                      {t("Kalender")}
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </div>
-                  {upcoming.length ? (
-                    upcoming.slice(0, 3).map((e) => (
-                      <button
-                        className="event"
-                        key={e.id}
-                        onClick={() => setEditor({ kind: "events", item: e })}
-                      >
-                        <span className="eventdate">
-                          {new Date(e.start!).getDate()}
-                          <small>
-                            {new Date(e.start!).toLocaleDateString(locale, {
-                              month: "short",
-                            })}
-                          </small>
-                        </span>
-                        <div>
-                          {e.title}
-                          <small>
-                            {dateText(e.start!)}{" "}
-                            {e.location && " · " + e.location}
-                          </small>
-                        </div>
+                <div className="card panel signal-panel">
+                  <span className="eyebrow">
+                    MAINFRAME // CONNECTED WORKSPACE
+                  </span>
+                  <h3>{t("Dein nächster Impuls")}</h3>
+                  <p>
+                    {t(
+                      "Entwickle deinen nächsten Release, frage deinen Agenten oder öffne deinen Vault.",
+                    )}
+                  </p>
+                  <div className="module-shortcuts">
+                    {[
+                      ["music", "♫", t("Musik")],
+                      ["agent", ">_", t("KI-Agent")],
+                      ["obsidian", "◇", "Obsidian"],
+                    ].map(([id, icon, label]) => (
+                      <button key={id} onClick={() => setPage(id)}>
+                        <strong>{icon}</strong>
+                        {label}
+                        <ArrowUpRight size={16} />
                       </button>
-                    ))
-                  ) : (
-                    <div className="empty">
-                      <CalendarDays />
-                      <p>{t("Raum für neue Pläne.")}</p>
-                      <span>{t("Du hast keine anstehenden Termine.")}</span>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               </section>
               <div className="sectionlabel">
@@ -768,7 +742,7 @@ export default function Home() {
                 )
               ) : (
                 <div className="empty">
-                  <NotebookPen />
+                  <Bot />
                   <p>{t("Noch keine Einträge.")}</p>
                   <span>{t("Lege oben deinen ersten Eintrag an.")}</span>
                 </div>
@@ -834,6 +808,15 @@ export default function Home() {
               )}
             </section>
           )}
+          {["music", "agent", "obsidian"].includes(page) && (
+            <WorkspaceModules
+              key={page}
+              page={page}
+              language={language}
+              enabled={enabled}
+              request={request}
+            />
+          )}
           {page === "settings" && (
             <section className="card panel settings">
               <h3>{t("Darstellung")}</h3>
@@ -858,8 +841,10 @@ export default function Home() {
                     value={theme}
                     onChange={(event) => setTheme(event.target.value as Theme)}
                   >
-                    <option value="dark">{t("Dunkel")}</option>
-                    <option value="light">{t("Hell")}</option>
+                    <option value="dark">Violet Mainframe</option>
+                    <option value="light">Paper Studio</option>
+                    <option value="amber">Amber Terminal</option>
+                    <option value="cyan">Cyan Grid</option>
                   </select>
                 </label>
               </div>

@@ -1,6 +1,6 @@
 import messages from "./messages.json";
 export type Language = "en" | "de";
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "amber" | "cyan";
 export const slogan = "Monopol_MainFrame your App for Everything";
 export const localeFor = (language: Language) =>
   language === "de" ? "de-DE" : "en-GB";

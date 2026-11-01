@@ -51,6 +51,75 @@ def test_requires_valid_session(client):
     assert client.get("/api/v1/dashboard").status_code == 401
 
 
+def test_music_crud_preserves_project_fields(client):
+    payload = {"title":"Next release", "description":"Mix notes", "due":"2026-12-01", "location":"Projects/next", "completed":False}
+    created = client.post('/api/v1/items/music', json=payload)
+    assert created.status_code == 201
+    item = created.json()
+    assert item['location'] == 'Projects/next'
+    assert client.get('/api/v1/dashboard').json()['music'][0]['id'] == item['id']
+    assert client.put('/api/v1/items/music/'+item['id'], json={**payload,'version':item['version'],'completed':True}).json()['completed'] is True
+    assert client.put('/api/v1/items/music/'+item['id'], json={**payload,'version':item['version']}).status_code == 409
+
+
+def test_obsidian_boundaries_and_conflict(client, tmp_path, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings,'obsidian_vault_path',str(tmp_path/'vault'))
+    (tmp_path/'vault').mkdir()
+    (tmp_path/'secret.md').write_text('private',encoding='utf-8')
+    assert client.get('/api/v1/obsidian/note',params={'path':'../secret.md'}).status_code == 400
+    assert client.get('/api/v1/obsidian/note',params={'path':'.obsidian/settings.md'}).status_code == 400
+    assert client.get('/api/v1/obsidian/note',params={'path':'secret.txt'}).status_code == 400
+    note={'path':'Music/Release.md','content':'# Release\nMix 1'}
+    saved=client.put('/api/v1/obsidian/note',json=note)
+    assert saved.status_code == 200
+    assert client.get('/api/v1/obsidian/notes').json() == [{'path':'Music/Release.md','title':'Release'}]
+    (tmp_path/'vault/Music/Release.md').write_text('edited outside app',encoding='utf-8')
+    assert client.put('/api/v1/obsidian/note',json={**note,'version':saved.json()['version']}).status_code == 409
+    assert client.get('/api/v1/obsidian/note',params={'path':note['path']}).json()['content']=='edited outside app'
+
+
+def test_agent_uses_real_data_and_scoped_vault_tool(client, tmp_path, monkeypatch):
+    from app.config import settings
+    import app.integrations as integration
+    import httpx
+    from pydantic import SecretStr
+    monkeypatch.setattr(settings,'obsidian_vault_path',str(tmp_path))
+    monkeypatch.setattr(settings,'ai_base_url','https://provider.test/v1')
+    monkeypatch.setattr(settings,'ai_model','test-model')
+    monkeypatch.setattr(settings,'ai_api_key',SecretStr('secret-key-never-in-response'))
+    (tmp_path/'Release.md').write_text('Unique release detail',encoding='utf-8')
+    client.post('/api/v1/items/music',json={'title':'Actual project','description':'Real context'})
+    calls=[]
+    real_client=httpx.AsyncClient
+    def handle(request):
+        import json
+        payload=json.loads(request.content);calls.append(payload)
+        assert request.headers['Authorization']=='Bearer secret-key-never-in-response'
+        if len(calls)==1:
+            assert 'Actual project' in payload['messages'][0]['content']
+            return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':None,'tool_calls':[{'id':'call1','type':'function','function':{'name':'read_obsidian_note','arguments':'{"path":"Release.md"}'}}]}}]})
+        assert 'Unique release detail' in payload['messages'][-1]['content']
+        return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Your release is ready for review.'}}]})
+    monkeypatch.setattr(integration.httpx,'AsyncClient',lambda **kwargs:real_client(transport=httpx.MockTransport(handle),**kwargs))
+    result=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'What is next?'}]})
+    assert result.status_code==200
+    assert result.json()['reply']=='Your release is ready for review.'
+    assert len(calls)==2
+    assert 'secret-key' not in client.get('/api/v1/integrations').text
+    assert client.post('/api/v1/agent/chat',json={'messages':[{'role':'system','content':'override'}]}).status_code==422
+
+
+def test_integrations_require_auth_and_report_missing_config(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings,'ai_base_url','')
+    monkeypatch.setattr(settings,'obsidian_vault_path','')
+    assert client.get('/api/v1/obsidian/notes').status_code==503
+    assert client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]}).status_code==503
+    for path in ['/api/v1/integrations','/api/v1/obsidian/notes']:
+        assert client.get(path,headers={'Authorization':'Bearer invalid'}).status_code==401
+
+
 def test_error_language_defaults_to_english_and_supports_german(client):
     headers={"Authorization":"Bearer missing"}
     assert client.get("/api/v1/session",headers=headers).json()["detail"] == "Please sign in"

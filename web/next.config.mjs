@@ -1,6 +1,7 @@
 export default {
   allowedDevOrigins: ["127.0.0.1"],
   output: "standalone",
+  experimental: { proxyTimeout: 75000 },
   async rewrites() {
     return [
       {

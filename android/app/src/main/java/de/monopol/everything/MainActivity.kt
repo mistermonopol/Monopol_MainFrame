@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         store = Store(this)
         language = store.get("language").takeIf { it=="de" } ?: "en"
-        theme = store.get("theme").takeIf { it=="light" } ?: "dark"
+        theme = store.get("theme").takeIf { it in listOf("light","amber","cyan") } ?: "dark"
         data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
         setContent {
@@ -67,6 +67,16 @@ class MainActivity : ComponentActivity() {
                 primary=Color(0xFF6940A6),onPrimary=Color.White,primaryContainer=Color(0xFFE8DCF8),onPrimaryContainer=Color(0xFF35214F),
                 secondary=Color(0xFF71538D),background=Color(0xFFF7F6FB),onBackground=Color(0xFF241E32),surface=Color.White,
                 onSurface=Color(0xFF241E32),surfaceVariant=Color(0xFFEEEBF5),onSurfaceVariant=Color(0xFF665A78),outline=Color(0xFFB5A6C8)
+            ) else if(theme=="amber" || theme=="cyan") darkColorScheme(
+                primary=if(theme=="amber") Color(0xFFFFC14A) else Color(0xFF52E5EE),
+                onPrimary=Color(0xFF101510),primaryContainer=if(theme=="amber") Color(0xFF423114) else Color(0xFF103944),
+                background=if(theme=="amber") Color(0xFF100E09) else Color(0xFF06151D),
+                surface=if(theme=="amber") Color(0xFF1D190F) else Color(0xFF0B232E),
+                surfaceVariant=if(theme=="amber") Color(0xFF302919) else Color(0xFF153C49),
+                onSurface=if(theme=="amber") Color(0xFFFFDDA0) else Color(0xFFDBF8FF),
+                onBackground=if(theme=="amber") Color(0xFFFFDDA0) else Color(0xFFDBF8FF),
+                onSurfaceVariant=if(theme=="amber") Color(0xFFC3AB7D) else Color(0xFF8DB8C8),
+                outline=if(theme=="amber") Color(0xFF806A37) else Color(0xFF3B7587)
             ) else darkColorScheme(
                 primary = Color(0xFFB69AF7), onPrimary = Color(0xFF21152F),
                 primaryContainer = Color(0xFF35294A), onPrimaryContainer = Color(0xFFE2CCFF),
@@ -162,8 +172,9 @@ class MainActivity : ComponentActivity() {
         val items = listOf(
             "Übersicht" to Icons.Outlined.Dashboard,
             "Aufgaben" to Icons.Outlined.CheckBox,
-            "Notizen" to Icons.Outlined.Description,
-            "Kalender" to Icons.Outlined.CalendarMonth,
+            "Musik" to Icons.Outlined.MusicNote,
+            "KI-Agent" to Icons.Outlined.SmartToy,
+            "Obsidian" to Icons.Outlined.Description,
             "Gesundheit" to Icons.Outlined.MonitorHeart,
             "Einstellungen" to Icons.Outlined.Settings
         )
@@ -238,11 +249,11 @@ class MainActivity : ComponentActivity() {
                     Text(t("Meine Aufgaben"), style = MaterialTheme.typography.titleMedium)
                     ItemList("tasks", data.optJSONArray("tasks") ?: JSONArray(), 4)
                     Text(t("Als Nächstes"), style = MaterialTheme.typography.titleMedium)
-                    val future = (data.optJSONArray("events") ?: JSONArray()).objects().filter { runCatching { Instant.parse(it.getString("end")) > Instant.now() }.getOrDefault(false) }.sortedBy { it.optString("start") }
-                    ItemList("events", JSONArray(future), 3)
-                    listOf("Finanzen" to "Budget & Ausgaben", "Smart Home" to "Dein Zuhause im Blick", "Musik" to "Releases & Projekte").forEach { (title,description) -> Card(Modifier.fillMaxWidth(), shape = RectangleShape) { Column(Modifier.padding(16.dp)) { Text(t(title)); Text(t(description)); Text(t("Nicht verbunden"), style = MaterialTheme.typography.labelSmall) } } }
+                    Text(t("Musikprojekte"), style=MaterialTheme.typography.titleMedium)
+                    ItemList("music", data.optJSONArray("music") ?: JSONArray(), 3)
+                    OutlinedButton(onClick={screen="KI-Agent"},shape=RectangleShape){Text(t("KI-Agent öffnen"))}
                 }
-                val kind = when (screen) { "Aufgaben" -> "tasks"; "Notizen" -> "notes"; "Kalender" -> "events"; else -> null }
+                val kind = when (screen) { "Aufgaben" -> "tasks"; "Musik" -> "music"; else -> null }
                 if (kind != null) {
                     Button(onClick = { editor = kind to null }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Neuer Eintrag")) }
                     ItemList(kind, data.optJSONArray(kind) ?: JSONArray())
@@ -257,6 +268,7 @@ class MainActivity : ComponentActivity() {
                     Text("${t("Letzte Übertragung:")} ${data.optJSONObject("health")?.optString("last_sync")?.takeUnless { it == "null" }?.let {dateText(it)} ?: t("Noch keine")}")
                     (data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()).objects().forEach { day -> Text(day.optString("day")); HealthCard(day) }
                 }
+                if(screen=="KI-Agent" || screen=="Obsidian") ConnectedModule(screen,api,connected,language)
                 if (screen == "Einstellungen") SettingsContent()
             }
         }
@@ -283,6 +295,7 @@ class MainActivity : ComponentActivity() {
                         SquareCheckbox(checked = item.optBoolean("completed"), enabled = connected && !busy, onCheckedChange = { mutate("/items/tasks/${item.getString("id")}", "PUT", JSONObject(item.toString()).put("completed", it)) })
                         Text(t(if (item.optBoolean("completed")) "Erledigt" else "Offen"), Modifier.padding(top = 13.dp))
                     }
+                    if(kind=="music") {Text(t(if(item.optBoolean("completed"))"Veröffentlicht" else "In Arbeit"),color=MaterialTheme.colorScheme.primary);if(!item.isNull("due"))Text(item.optString("due"));if(item.optString("location").isNotBlank())Text(item.optString("location"))}
                     if (kind == "events") Text("${dateText(item.optString("start"))} – ${dateText(item.optString("end"))}\n${item.optString("location")}")
                     if (item.optString("description").isNotEmpty()) Text(item.optString("description"))
                 }
@@ -295,7 +308,7 @@ class MainActivity : ComponentActivity() {
         Text(t("Sprache"))
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("en" to "English","de" to "Deutsch").forEach { (value,label) -> OutlinedButton(onClick={language=value;store.put("language",value);message=""}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(language==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(label)} } }
         Text(t("Design"))
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Dunkel","light" to "Hell").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Violet Mainframe","light" to "Paper Studio","amber" to "Amber Terminal","cyan" to "Cyan Grid").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
         Text(t("Einstellungen werden auf diesem Gerät gespeichert."),style=MaterialTheme.typography.bodySmall)
         var server by remember { mutableStateOf(store.get("server").ifBlank { "https://monopol-ai.de" }) }
         var password by remember { mutableStateOf("") }
@@ -335,6 +348,7 @@ class MainActivity : ComponentActivity() {
         var start by remember { mutableStateOf(localTime("start")) }
         var end by remember { mutableStateOf(localTime("end")) }
         var location by remember { mutableStateOf(item?.optString("location") ?: "") }
+        var released by remember { mutableStateOf(item?.optBoolean("completed") ?: false) }
         var validation by remember { mutableStateOf("") }
         var deleting by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { editor = null }, title = { Text(t(if (item == null) "Neuer Eintrag" else "Eintrag bearbeiten")) }, text = {
@@ -342,7 +356,11 @@ class MainActivity : ComponentActivity() {
                 if (validation.isNotBlank()) Text(t(validation), color = MaterialTheme.colorScheme.error)
                 OutlinedTextField(title, { title = it }, label = { Text(t("Titel")) }, shape = RectangleShape)
                 OutlinedTextField(description, { description = it }, label = { Text(t("Beschreibung")) }, minLines = 3, shape = RectangleShape)
-                if (kind == "tasks") OutlinedTextField(due, { due = it }, label = { Text(t("Fällig: JJJJ-MM-TT (optional)")) }, shape = RectangleShape)
+                if (kind == "tasks" || kind == "music") OutlinedTextField(due, { due = it }, label = { Text(t("Fällig: JJJJ-MM-TT (optional)")) }, shape = RectangleShape)
+                if(kind=="music") {
+                    OutlinedTextField(location,{location=it},label={Text(t("Projekt-Link oder Dateipfad"))},shape=RectangleShape)
+                    Row { SquareCheckbox(released,true){released=it};Text(t("Veröffentlicht"),Modifier.padding(top=13.dp)) }
+                }
                 if (kind == "events") {
                     Text(t("Termine in Europe/Berlin"), style = MaterialTheme.typography.labelSmall)
                     OutlinedTextField(start, { start = it }, label = { Text(t("Beginn: JJJJ-MM-TTTHH:MM")) }, shape = RectangleShape)
@@ -355,6 +373,7 @@ class MainActivity : ComponentActivity() {
             try {
                 require(title.isNotBlank() && title.length <= 200) { "Titel benötigt 1–200 Zeichen." }
                 val body = JSONObject().put("title", title).put("description", description).put("version", item?.optInt("version") ?: 1)
+                if(kind=="music") body.put("due",if(due.isBlank())JSONObject.NULL else LocalDate.parse(due).toString()).put("completed",released).put("location",location)
                 if (kind == "tasks") body.put("due", if (due.isBlank()) JSONObject.NULL else LocalDate.parse(due).toString()).put("completed", item?.optBoolean("completed") ?: false)
                 if (kind == "events") {
                     val zone = ZoneId.of("Europe/Berlin")

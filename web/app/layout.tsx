@@ -12,7 +12,7 @@ export default function Layout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{document.documentElement.dataset.theme=localStorage.getItem('monopol-theme')==='light'?'light':'dark';document.documentElement.lang=localStorage.getItem('monopol-language')==='de'?'de':'en'}catch(e){}",
+              "try{document.documentElement.dataset.theme=['dark','light','amber','cyan'].includes(localStorage.getItem('monopol-theme'))?localStorage.getItem('monopol-theme'):'dark';document.documentElement.lang=localStorage.getItem('monopol-language')==='de'?'de':'en'}catch(e){}",
           }}
         />
         {children}

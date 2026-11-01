@@ -26,6 +26,8 @@ services:
     build: ./backend
     env_file: ${ENV_FILE:-.env}
     environment: *api-environment
+    volumes:
+      - obsidian:/vault
     depends_on:
       migrate: {condition: service_completed_successfully}
     healthcheck:
@@ -41,3 +43,4 @@ services:
     restart: unless-stopped
 volumes:
   postgres:
+  obsidian:

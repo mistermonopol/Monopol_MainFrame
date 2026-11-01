@@ -31,6 +31,12 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:?Set the external HTTPS URL without a trailing slash}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a strong login password of at least 16 characters}
       COOKIE_SECURE: "true"
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      OBSIDIAN_VAULT_PATH: /vault
+    volumes:
+      - obsidian:/vault
     # Run schema initialization before accepting traffic. No one-shot service
     # that Coolify could incorrectly report as exited/unhealthy is needed.
     command:
@@ -63,3 +69,4 @@ services:
 
 volumes:
   postgres:
+  obsidian:
