@@ -1,5 +1,7 @@
 # Coolify: Git repository > Docker Compose; base directory /.
 # Configure secrets under Environment Variables, not in a repository .env file.
+# Enable both Build time and Runtime for these variables in Coolify: Compose
+# interpolates the complete file even when running only `docker compose build`.
 services:
   db:
     build:

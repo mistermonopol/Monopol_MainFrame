@@ -37,7 +37,9 @@ Bei einer eigenen Domain stattdessen deren URL verwenden. Schema, Host und Pfad 
 
 ## 4. Umgebungsvariablen setzen
 
-Unter **Environment Variables** die folgenden Werte eintragen. Geheimnisse gehören ausschließlich in Coolify. Sie werden zur Laufzeit benötigt; nicht als Build-Argumente markieren.
+Unter **Environment Variables → Production** die folgenden Werte eintragen. Geheimnisse gehören ausschließlich in Coolify. Für diese Compose-Anwendung muss jede referenzierte Variable **sowohl während des Builds als auch zur Laufzeit verfügbar** sein: **Build time = Available during build** und **Runtime = Available in the container** aktivieren. In älteren Oberflächen heißen die Optionen beispielsweise **Build Variable** und **Runtime Variable**.
+
+Der Grund: Auch `docker compose build` löst die Variablen der gesamten Compose-Datei auf. Eine ausschließlich zur Laufzeit verfügbare Variable fehlt dann in Coolifys `build-time.env`, und der Build bricht bereits vor dem Bauen der Images ab. Dafür sind keine zusätzlichen `ARG`-Definitionen in den Dockerfiles und keine `NEXT_PUBLIC_`-Variablen nötig.
 
 | Variable | Wert |
 | --- | --- |
@@ -55,6 +57,8 @@ Unter **Environment Variables** die folgenden Werte eintragen. Geheimnisse gehö
 Für jedes der vier Secrets separat `openssl rand -hex 32` auf einem vertrauenswürdigen Rechner ausführen. Hexadezimale Passwörter können ohne zusätzliche URL-Kodierung in den internen Datenbank-URLs verwendet werden. `DATABASE_URL`, `HEALTH_DATABASE_URL` und `COOKIE_SECURE` setzt die Compose-Datei selbst.
 
 Die drei Datenbankpasswörter müssen vor dem **ersten** Deployment endgültig gesetzt sein. Bei einem bestehenden Volume ändern neue Umgebungswerte die PostgreSQL-Rollenpasswörter nicht automatisch. Ein Passwortwechsel muss in PostgreSQL und anschließend in Coolify erfolgen. Bei einem Fehler kein Volume mit persönlichen Daten löschen.
+
+Bei bereits angelegten Variablen die Build-/Runtime-Einstellungen für jede Variable ausdrücklich bearbeiten und speichern. Das erneute Einfügen derselben Werte ohne Flags im Developer View behält vorhandene Scope-Einstellungen bei. In Coolify-Versionen mit Flag-Unterstützung setzt eine Zeile `# coolify: buildtime=true runtime=true` direkt oberhalb der jeweiligen Variablen beide Optionen. Nach einer Änderung der Build-Verfügbarkeit **Deploy/Redeploy** verwenden, nicht nur Restart.
 
 ## 5. Deployen und privat erreichbar machen
 
@@ -103,6 +107,7 @@ Nur wählen, wenn du die App absichtlich außerhalb des VPN erreichbar machen m�
 
 | Fehler | Prüfung |
 | --- | --- |
+| `required variable ... is missing` oder `Defaulting to a blank string` beim Build | Alle acht Pflichtwerte unter Production gesetzt? Für jede Variable Build time **und** Runtime aktivieren, speichern und neu deployen. Runtime-only-Werte fehlen in `build-time.env`. |
 | Coolify findet Compose nicht | Branch `main`, Base Directory `/`, Compose Location `/compose.coolify.yaml` |
 | Passwortauthentifizierung fehlgeschlagen | Stimmen Coolify-Werte und bereits initialisierte PostgreSQL-Rollen überein? |
 | Google `redirect_uri_mismatch` | Google-URI ist exakt `PUBLIC_URL` plus `/api/v1/auth/callback` |
@@ -112,4 +117,4 @@ Nur wählen, wenn du die App absichtlich außerhalb des VPN erreichbar machen m�
 | Private URL nicht erreichbar | Tailscale auf beiden Geräten aktiv, ACL erlaubt Zugriff, Serve zeigt auf Host-Port 3080 |
 | `port is already allocated` | `PRIVATE_WEB_PORT` ändern und Tailscale Serve auf denselben neuen Port setzen |
 
-Grundlage: [Coolify: Docker Compose aus Git](https://coolify.io/docs/applications/builds/docker-compose) und [Anwendungs- und Domainkonfiguration](https://coolify.io/docs/applications/configuration/general).
+Grundlage: [Coolify: Docker Compose aus Git](https://coolify.io/docs/applications/builds/docker-compose), [Umgebungsvariablen und Build-/Runtime-Scope](https://coolify.io/docs/applications/configuration/environment-variables) und [Anwendungs- und Domainkonfiguration](https://coolify.io/docs/applications/configuration/general).
