@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Language, Theme, localeFor, translator, slogan } from "./i18n";
 import DashboardLayouts from "./DashboardLayouts";
 import TaskWorkspace from "./TaskWorkspace";
+import NotificationSettings from "./NotificationSettings";
 import { LayoutName, layouts, validLayout } from "./appearance";
 import WorkspaceModules from "./WorkspaceModules";
 import {
@@ -34,6 +35,8 @@ type Item = {
   description: string;
   due?: string;
   completed?: boolean;
+  reminders_enabled?: boolean;
+  remind_at?: string | null;
   start?: string;
   end?: string;
   location?: string;
@@ -188,6 +191,10 @@ export default function Home() {
       menuButtonRef.current?.focus();
     };
   }, [mobileMenuOpen]);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "tasks")
+      setPage("tasks");
+  }, []);
   function toggleSidebar() {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
@@ -673,10 +680,16 @@ export default function Home() {
               language={language}
               enabled={enabled}
               request={request}
+              onChanged={() => void load()}
             />
           )}
           {page === "settings" && (
             <section className="card panel settings">
+              <NotificationSettings
+                language={language}
+                enabled={enabled}
+                request={request}
+              />
               <h3>{t("Darstellung")}</h3>
               <div className="appearance-heading">
                 <span>01 / {t("Layout")}</span>
@@ -854,6 +867,10 @@ export default function Home() {
                 title: f.get("title"),
                 description: f.get("description"),
                 due: f.get("due") || null,
+                reminders_enabled: f.get("reminders_enabled") === "on",
+                remind_at: f.get("remind_at")
+                  ? new Date(String(f.get("remind_at"))).toISOString()
+                  : null,
                 completed: editor.item?.completed || false,
                 start: f.get("start")
                   ? new Date(String(f.get("start"))).toISOString()
@@ -917,6 +934,43 @@ export default function Home() {
                   defaultValue={editor.item?.due || ""}
                 />
               </label>
+            )}
+            {editor.kind === "tasks" && (
+              <>
+                <label className="reminder-toggle">
+                  <input
+                    type="checkbox"
+                    name="reminders_enabled"
+                    defaultChecked={editor.item?.reminders_enabled !== false}
+                  />
+                  {t("Erinnerung aktiv")}
+                </label>
+                <label>
+                  {t("Eigene Erinnerungszeit (lokale Gerätezeit)")}
+                  <input
+                    type="datetime-local"
+                    name="remind_at"
+                    defaultValue={
+                      editor.item?.remind_at
+                        ? new Date(
+                            new Date(editor.item.remind_at).getTime() -
+                              new Date(
+                                editor.item.remind_at,
+                              ).getTimezoneOffset() *
+                                60000,
+                          )
+                            .toISOString()
+                            .slice(0, 16)
+                        : ""
+                    }
+                  />
+                </label>
+                <small>
+                  {t(
+                    "Ohne eigene Zeit: am Fälligkeitstag um 09:00 Uhr Europe/Berlin. Benachrichtigungen in den Einstellungen aktivieren.",
+                  )}
+                </small>
+              </>
             )}
             {editor.kind === "events" && (
               <>

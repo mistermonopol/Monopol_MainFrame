@@ -64,6 +64,8 @@ class MainActivity : ComponentActivity() {
         layout = store.get("layout").takeIf { it in listOf("index","studio","control","focus") } ?: "index"
         theme = store.get("theme").takeIf { it in listOf("light","amber","cyan") } ?: "dark"
         data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
+        if(intent?.getBooleanExtra("open_tasks",false)==true)screen="Aufgaben"
+        if(store.get("taskNotifications")=="true")TaskNotifications.schedule(this)
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
         setContent {
             MaterialTheme(colorScheme = if(theme=="light") lightColorScheme(
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
         if (store.get("token").isNotEmpty()) refresh(sync = true)
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); if (intent.action?.contains("PERMISSION") == true) screen = "Einstellungen" }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); if(intent.getBooleanExtra("open_tasks",false)){screen="Aufgaben";refresh()}; if (intent.action?.contains("PERMISSION") == true) screen = "Einstellungen" }
 
     private fun login(password: String, onSuccess: () -> Unit) {
         try {
@@ -121,6 +123,7 @@ class MainActivity : ComponentActivity() {
                 data = JSONObject(api.call("/dashboard"))
                 store.put("cache", data.toString()); store.put("loaded", Instant.now().toString())
                 connected = true; message = ""
+                if(store.get("taskNotifications")=="true")TaskNotifications.schedule(this@MainActivity)
                 if (sync && store.get("syncEnabled") == "true") {
                     try { HealthSync(this@MainActivity).sync(); data = JSONObject(api.call("/dashboard")); store.put("cache", data.toString()) }
                     catch (e: Exception) { message = "${t("Gesundheit:")} ${t(e.message ?: "Die Anfrage konnte nicht gespeichert werden.")} ${t("Übertragung wird später erneut versucht.")}" }
@@ -278,7 +281,7 @@ class MainActivity : ComponentActivity() {
                     Text("${t("Letzte Übertragung:")} ${data.optJSONObject("health")?.optString("last_sync")?.takeUnless { it == "null" }?.let {dateText(it)} ?: t("Noch keine")}")
                     (data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()).objects().forEach { day -> Text(day.optString("day")); HealthCard(day) }
                 }
-                if(screen=="KI-Agent" || screen=="Obsidian") ConnectedModule(screen,api,connected,language)
+                if(screen=="KI-Agent" || screen=="Obsidian") ConnectedModule(screen,api,connected,language){refresh()}
                 if (screen == "Einstellungen") SettingsContent()
             }
         }
@@ -408,6 +411,11 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun SettingsContent() {
+        var notifications by remember{mutableStateOf(store.get("taskNotifications")=="true")}
+        val notificationPermission=rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()){granted->notifications=granted;store.put("taskNotifications",granted.toString());if(granted)TaskNotifications.schedule(this) else TaskNotifications.stop(this)}
+        Text(t("Aufgaben-Erinnerungen"),style=MaterialTheme.typography.titleMedium)
+        Text(t("Standard: 09:00 Uhr Europe/Berlin. Android prüft im Hintergrund ungefähr alle 15 Minuten; Energiesparen kann die Zustellung verzögern."),style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick={if(notifications){notifications=false;store.put("taskNotifications","false");TaskNotifications.stop(this)}else notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)},shape=RectangleShape){Text(t(if(notifications)"Benachrichtigungen deaktivieren" else "Benachrichtigungen aktivieren"))}
         Text(t("Darstellung"),style=MaterialTheme.typography.titleMedium)
         Text(t("Layout"),style=MaterialTheme.typography.titleMedium)
         Text(t("Vier Arbeitsweisen. Jede mit jeder Farbe kombinierbar."),style=MaterialTheme.typography.bodySmall)
@@ -464,6 +472,8 @@ class MainActivity : ComponentActivity() {
         var end by remember { mutableStateOf(localTime("end")) }
         var location by remember { mutableStateOf(item?.optString("location") ?: "") }
         var released by remember { mutableStateOf(item?.optBoolean("completed") ?: false) }
+        var reminder by remember {mutableStateOf(localTime("remind_at"))}
+        var remindersEnabled by remember {mutableStateOf(item?.optBoolean("reminders_enabled",true)?:true)}
         var validation by remember { mutableStateOf("") }
         var deleting by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { editor = null }, title = { Text(t(if (item == null) "Neuer Eintrag" else "Eintrag bearbeiten")) }, text = {
@@ -472,6 +482,10 @@ class MainActivity : ComponentActivity() {
                 OutlinedTextField(title, { title = it }, label = { Text(t("Titel")) }, shape = RectangleShape)
                 OutlinedTextField(description, { description = it }, label = { Text(t("Beschreibung")) }, minLines = 3, shape = RectangleShape)
                 if (kind == "tasks" || kind == "music") OutlinedTextField(due, { due = it }, label = { Text(t("Fällig: JJJJ-MM-TT (optional)")) }, shape = RectangleShape)
+                if(kind=="tasks") {
+                    Row {SquareCheckbox(remindersEnabled,true){remindersEnabled=it};Text(t("Erinnerung aktiv"),Modifier.padding(top=13.dp))}
+                    OutlinedTextField(reminder,{reminder=it},label={Text(t("Erinnerung: JJJJ-MM-TTTHH:MM (Europe/Berlin)"))},shape=RectangleShape)
+                }
                 if(kind=="music") {
                     OutlinedTextField(location,{location=it},label={Text(t("Projekt-Link oder Dateipfad"))},shape=RectangleShape)
                     Row { SquareCheckbox(released,true){released=it};Text(t("Veröffentlicht"),Modifier.padding(top=13.dp)) }
@@ -489,7 +503,7 @@ class MainActivity : ComponentActivity() {
                 require(title.isNotBlank() && title.length <= 200) { "Titel benötigt 1–200 Zeichen." }
                 val body = JSONObject().put("title", title).put("description", description).put("version", item?.optInt("version") ?: 1)
                 if(kind=="music") body.put("due",if(due.isBlank())JSONObject.NULL else LocalDate.parse(due).toString()).put("completed",released).put("location",location)
-                if (kind == "tasks") body.put("due", if (due.isBlank()) JSONObject.NULL else LocalDate.parse(due).toString()).put("completed", item?.optBoolean("completed") ?: false)
+                if (kind == "tasks") body.put("due", if (due.isBlank()) JSONObject.NULL else LocalDate.parse(due).toString()).put("completed", item?.optBoolean("completed") ?: false).put("reminders_enabled",remindersEnabled).put("remind_at",if(reminder.isBlank())JSONObject.NULL else LocalDateTime.parse(reminder).atZone(ZoneId.of("Europe/Berlin")).toInstant().toString())
                 if (kind == "events") {
                     val zone = ZoneId.of("Europe/Berlin")
                     val from = LocalDateTime.parse(start).atZone(zone).toInstant()

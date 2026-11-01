@@ -2,6 +2,9 @@ import hashlib
 import hmac
 import secrets
 import time
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 from datetime import date, datetime, timedelta, timezone
 from collections import deque
 from threading import Lock
@@ -18,7 +21,22 @@ from .config import settings
 from .db import Session, HealthSession, Item, SessionToken, HealthDay, now
 from .localization import MESSAGES, GERMAN_MESSAGES
 
-app = FastAPI(title="Monopol_MainFrame API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(application):
+    from .brain import initialize_brain
+    from .reminders import reminder_loop
+    try:
+        initialize_brain()
+    except (HTTPException, OSError):
+        logging.getLogger(__name__).warning('Brain vault unavailable; other app modules remain available.')
+    worker = asyncio.create_task(reminder_loop())
+    yield
+    worker.cancel()
+    with suppress(asyncio.CancelledError):
+        await worker
+
+
+app = FastAPI(title="Monopol_MainFrame API", version="1.0.0", lifespan=lifespan)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -138,6 +156,8 @@ class ItemInput(BaseModel):
     description: str = Field(default="", max_length=50000)
     due: date | None = None
     completed: bool = False
+    reminders_enabled: bool = True
+    remind_at: AwareDatetime | None = None
     start: AwareDatetime | None = None
     end: AwareDatetime | None = None
     location: str = Field(default="", max_length=500)
@@ -159,7 +179,7 @@ def check_kind(kind):
 
 
 def item_data(kind, data):
-    fields = {"tasks": {"title", "description", "due", "completed"},
+    fields = {"tasks": {"title", "description", "due", "completed", "reminders_enabled", "remind_at"},
               "notes": {"title", "description"},
               "music": {"title", "description", "due", "completed", "location"},
               "events": {"title", "description", "start", "end", "location"}}
@@ -285,3 +305,5 @@ def dashboard():
 # Authentication and CSRF checks apply to every integration route.
 from .integrations import router as integrations_router
 app.include_router(integrations_router, prefix="/api/v1", dependencies=[Depends(authenticated)])
+from .reminders import router as reminders_router
+app.include_router(reminders_router, prefix="/api/v1", dependencies=[Depends(authenticated)])

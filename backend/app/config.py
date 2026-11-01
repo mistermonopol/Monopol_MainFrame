@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ai_model: str = ""
     ai_api_key: SecretStr = SecretStr("")
     obsidian_vault_path: str = ""
+    obsidian_vault_name: str = "mono_frame_brain"
 
 
 settings = Settings()

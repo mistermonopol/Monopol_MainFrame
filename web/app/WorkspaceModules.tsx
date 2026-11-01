@@ -1,7 +1,8 @@
 "use client";
 import SpotifyFrame from "./SpotifyFrame";
+import BrainGraph from "./BrainGraph";
 import { useEffect, useState } from "react";
-import { Language, translator } from "./i18n";
+import { Language, translator, actionLabel } from "./i18n";
 import {
   ArrowUpRight,
   Music,
@@ -29,13 +30,20 @@ export default function WorkspaceModules({
   language,
   enabled,
   request,
+  onChanged,
 }: {
   page: string;
   language: Language;
   enabled: boolean;
   request: Request;
+  onChanged?: () => void;
 }) {
   const t = translator(language);
+  const [graphRevision, setGraphRevision] = useState(0);
+  const [actions, setActions] = useState<
+    { type: string; title: string; kind?: string }[]
+  >([]);
+  const [activity, setActivity] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{
@@ -61,6 +69,16 @@ export default function WorkspaceModules({
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      if (page === "agent") {
+        try {
+          const rows = await request("/agent/activity");
+          if (Array.isArray(rows)) {
+            setActivity(rows);
+            if (rows[0]) setActions(rows[0].actions || []);
+          }
+          onChanged?.();
+        } catch {}
+      }
       setBusy(false);
     }
   }
@@ -72,6 +90,10 @@ export default function WorkspaceModules({
         const s = await request("/integrations");
         if (!active) return;
         setStatus(s);
+        if (page === "agent") {
+          const rows = await request("/agent/activity");
+          if (active && Array.isArray(rows)) setActivity(rows);
+        }
         if (page === "music") {
           const rows = await request("/items/music");
           if (active) setProjects(rows);
@@ -141,7 +163,7 @@ export default function WorkspaceModules({
             ? t("Ideen, Sessions und Releases an einem Ort.")
             : page === "agent"
               ? t(
-                  "Frage nach Aufgaben, Musik und Gesundheitswerten. Dein Agent kann auch deinen Obsidian-Vault lesen.",
+                  "Dein Agent kann Aufgaben, Musikprojekte und Notizen bearbeiten. mono_frame_brain liefert das Wissen dazu.",
                 )
               : t(
                   "Öffne und bearbeite die Markdown-Dateien deines Obsidian-Vaults.",
@@ -364,8 +386,12 @@ export default function WorkspaceModules({
               void run(async () => {
                 const result = await request("/agent/chat", {
                   method: "POST",
-                  body: JSON.stringify({ messages: next.slice(-29) }),
+                  body: JSON.stringify({
+                    messages: next.slice(-29),
+                    request_id: crypto.randomUUID(),
+                  }),
                 });
+                setActions(result.actions || []);
                 setMessages([
                   ...next,
                   { role: "assistant", content: result.reply },
@@ -389,6 +415,26 @@ export default function WorkspaceModules({
               {t("Senden")}
             </button>
           </form>
+          <div className="agent-actions" aria-live="polite">
+            {actions.map((action, index) => (
+              <p key={index}>
+                ✓ {actionLabel(action, language)} · {action.title}
+              </p>
+            ))}
+          </div>
+          <details className="agent-activity">
+            <summary>{t("Gespeicherte Agenten-Aktionen")}</summary>
+            {activity
+              .flatMap((row) => row.actions || [])
+              .map((action: any, index: number) => (
+                <p key={index}>
+                  ✓ {actionLabel(action, language)} · {action.title}
+                </p>
+              ))}
+            {!activity.some((row) => row.actions?.length) && (
+              <p>{t("Noch keine Agenten-Aktionen.")}</p>
+            )}
+          </details>
           {!status?.ai && (
             <p>
               {t(
@@ -410,100 +456,109 @@ export default function WorkspaceModules({
             </p>
           </div>
         ) : (
-          <div className="vault-layout">
-            <div className="card vault-index">
-              <h3>VAULT // .md</h3>
-              <input
-                aria-label={t("Notizen suchen")}
-                placeholder={t("Notizen suchen")}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <button
-                disabled={busy || !enabled}
-                onClick={() => {
-                  if (
-                    dirty &&
-                    !confirm(t("Ungespeicherte Änderungen verwerfen?"))
-                  )
-                    return;
-                  setNote({ path: "", content: "", version: "" });
-                  setDirty(true);
-                }}
-              >
-                <Plus size={16} />
-                {t("Neue Vault-Notiz")}
-              </button>
-              {notes
-                .filter((n) =>
-                  n.path.toLowerCase().includes(search.toLowerCase()),
-                )
-                .map((n) => (
-                  <button
-                    disabled={busy}
-                    className={note?.path === n.path ? "active" : ""}
-                    key={n.path}
-                    onClick={() => void openNote(n.path)}
-                  >
-                    <Gem size={14} />
-                    {n.path}
-                  </button>
-                ))}
-              {!notes.length && <p>{t("Noch keine Einträge.")}</p>}
-            </div>
-            <div className="card panel vault-editor">
-              {note ? (
-                <form
-                  className="module-form"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void run(async () => {
-                      setNote(
-                        await request("/obsidian/note", {
-                          method: "PUT",
-                          body: JSON.stringify(note),
-                        }),
-                      );
-                      setDirty(false);
-                      setNotes(await request("/obsidian/notes"));
-                    });
+          <div className="brain-vault">
+            <BrainGraph
+              language={language}
+              request={request}
+              revision={graphRevision}
+              onOpen={(path) => void openNote(path)}
+            />
+            <div className="vault-layout">
+              <div className="card vault-index">
+                <h3>VAULT // .md</h3>
+                <input
+                  aria-label={t("Notizen suchen")}
+                  placeholder={t("Notizen suchen")}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                <button
+                  disabled={busy || !enabled}
+                  onClick={() => {
+                    if (
+                      dirty &&
+                      !confirm(t("Ungespeicherte Änderungen verwerfen?"))
+                    )
+                      return;
+                    setNote({ path: "", content: "", version: "" });
+                    setDirty(true);
                   }}
                 >
-                  <label>
-                    {t("Dateipfad im Vault")}
-                    <input
-                      required
-                      readOnly={!!note.version}
-                      placeholder="Music/Release.md"
-                      value={note.path}
+                  <Plus size={16} />
+                  {t("Neue Vault-Notiz")}
+                </button>
+                {notes
+                  .filter((n) =>
+                    n.path.toLowerCase().includes(search.toLowerCase()),
+                  )
+                  .map((n) => (
+                    <button
+                      disabled={busy}
+                      className={note?.path === n.path ? "active" : ""}
+                      key={n.path}
+                      onClick={() => void openNote(n.path)}
+                    >
+                      <Gem size={14} />
+                      {n.path}
+                    </button>
+                  ))}
+                {!notes.length && <p>{t("Noch keine Einträge.")}</p>}
+              </div>
+              <div className="card panel vault-editor">
+                {note ? (
+                  <form
+                    className="module-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void run(async () => {
+                        setNote(
+                          await request("/obsidian/note", {
+                            method: "PUT",
+                            body: JSON.stringify(note),
+                          }),
+                        );
+                        setDirty(false);
+                        setGraphRevision((value) => value + 1);
+                        setNotes(await request("/obsidian/notes"));
+                      });
+                    }}
+                  >
+                    <label>
+                      {t("Dateipfad im Vault")}
+                      <input
+                        required
+                        readOnly={!!note.version}
+                        placeholder="Music/Release.md"
+                        value={note.path}
+                        onChange={(e) => {
+                          setNote({ ...note, path: e.target.value });
+                          setDirty(true);
+                        }}
+                      />
+                    </label>
+                    <textarea
+                      aria-label={t("Markdown-Inhalt")}
+                      rows={22}
+                      maxLength={200000}
+                      value={note.content}
                       onChange={(e) => {
-                        setNote({ ...note, path: e.target.value });
+                        setNote({ ...note, content: e.target.value });
                         setDirty(true);
                       }}
                     />
-                  </label>
-                  <textarea
-                    aria-label={t("Markdown-Inhalt")}
-                    rows={22}
-                    maxLength={200000}
-                    value={note.content}
-                    onChange={(e) => {
-                      setNote({ ...note, content: e.target.value });
-                      setDirty(true);
-                    }}
-                  />
-                  <button disabled={busy || !enabled || !dirty} type="submit">
-                    <Save size={16} />
-                    {t("Speichern")}
-                    {dirty ? " *" : ""}
-                  </button>
-                </form>
-              ) : (
-                <div className="empty">
-                  <Gem size={40} />
-                  <p>{t("Wähle eine Notiz aus deinem Vault.")}</p>
-                </div>
-              )}
+                    <button disabled={busy || !enabled || !dirty} type="submit">
+                      <Save size={16} />
+                      {t("Speichern")}
+                      {dirty ? " *" : ""}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="empty">
+                    <Gem size={40} />
+                    <p>{t("Wähle eine Notiz aus deinem Vault.")}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}

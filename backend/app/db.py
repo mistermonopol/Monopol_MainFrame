@@ -38,7 +38,7 @@ class HealthDay(HealthBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-engine = create_engine(settings.database_url)
-health_engine = create_engine(settings.health_database_url)
+engine = create_engine(settings.database_url, hide_parameters=True)
+health_engine = create_engine(settings.health_database_url, hide_parameters=True)
 Session = sessionmaker(engine)
 HealthSession = sessionmaker(health_engine)

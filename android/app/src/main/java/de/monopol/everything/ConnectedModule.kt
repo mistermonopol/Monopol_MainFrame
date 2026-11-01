@@ -11,7 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
-@Composable fun ConnectedModule(screen:String,api:Api,connected:Boolean,language:String) {
+@Composable fun ConnectedModule(screen:String,api:Api,connected:Boolean,language:String,onChanged:()->Unit={}) {
     fun t(s:String)=Localizer.text(s,language)
     val scope=rememberCoroutineScope()
     var error by remember(screen){mutableStateOf("")}
@@ -19,6 +19,8 @@ import java.net.URLEncoder
     var status by remember(screen){mutableStateOf(JSONObject())}
     var prompt by remember {mutableStateOf("")}
     var messages by remember {mutableStateOf(listOf<Pair<String,String>>())}
+    var graph by remember {mutableStateOf(JSONObject())}
+    var actions by remember {mutableStateOf(JSONArray())}
     var notes by remember {mutableStateOf(JSONArray())}
     var selected by remember {mutableStateOf<JSONObject?>(null)}
     var path by remember {mutableStateOf("")}
@@ -26,7 +28,15 @@ import java.net.URLEncoder
     var dirty by remember {mutableStateOf(false)}
     var pending by remember {mutableStateOf<String?>(null)}
     fun open(target:String) {scope.launch {busy=true;error="";try{selected=if(target.isBlank()) JSONObject().put("version","") else JSONObject(api.call("/obsidian/note?path="+URLEncoder.encode(target,"UTF-8")));path=target;content=selected?.optString("content")?:"";dirty=false}catch(e:Exception){error=e.message?:"Request failed"}finally{busy=false}}}
-    LaunchedEffect(screen,connected) {if(connected)try{status=JSONObject(api.call("/integrations"));if(screen=="Obsidian"&&status.optBoolean("obsidian"))notes=JSONArray(api.call("/obsidian/notes"))}catch(e:Exception){error=e.message?:"Request failed"}}
+    LaunchedEffect(screen,connected) {
+        if(connected)try {
+            status=JSONObject(api.call("/integrations"))
+            if(screen=="KI-Agent"){val activity=JSONArray(api.call("/agent/activity"));if(activity.length()>0)actions=activity.getJSONObject(0).optJSONArray("actions")?:JSONArray()}
+            if(screen=="Obsidian"&&status.optBoolean("obsidian")) {
+                notes=JSONArray(api.call("/obsidian/notes"));graph=JSONObject(api.call("/obsidian/graph"))
+            }
+        }catch(e:Exception){error=e.message?:"Request failed"}
+    }
     if(error.isNotBlank()) Text(t(error),color=MaterialTheme.colorScheme.error)
     if(screen=="KI-Agent") {
         Text(t("Ein Chat. Dein ganzer Workspace."),style=MaterialTheme.typography.titleLarge)
@@ -37,18 +47,20 @@ import java.net.URLEncoder
         OutlinedTextField(prompt,{prompt=it.take(12000)},label={Text(t("Nachricht an den Agenten"))},modifier=Modifier.fillMaxWidth(),shape=RectangleShape)
         Button(enabled=connected&&status.optBoolean("ai")&&!busy&&prompt.isNotBlank(),shape=RectangleShape,onClick={
             val next=messages+Pair("user",prompt.trim());messages=next;prompt="";busy=true;error=""
-            scope.launch{try{val history=JSONArray();next.takeLast(29).forEach{(role,text)->history.put(JSONObject().put("role",role).put("content",text))};val result=JSONObject(api.call("/agent/chat","POST",JSONObject().put("messages",history)));messages=next+Pair("assistant",result.getString("reply"))}catch(e:Exception){error=e.message?:"Request failed"}finally{busy=false}}
+            scope.launch{try{val history=JSONArray();next.takeLast(29).forEach{(role,text)->history.put(JSONObject().put("role",role).put("content",text))};val result=JSONObject(api.call("/agent/chat","POST",JSONObject().put("messages",history).put("request_id",java.util.UUID.randomUUID().toString())));messages=next+Pair("assistant",result.getString("reply"));actions=result.optJSONArray("actions")?:JSONArray()}catch(e:Exception){error=e.message?:"Request failed"}finally{try{val activity=JSONArray(api.call("/agent/activity"));if(activity.length()>0)actions=activity.getJSONObject(0).optJSONArray("actions")?:JSONArray();onChanged()}catch(_:Exception){};busy=false}}
         }){Text(t("Senden"))}
+        for(i in 0 until actions.length()){val action=actions.getJSONObject(i);Text("✓ ${t(if(action.optString("type").startsWith("update"))"Eintrag aktualisiert" else "Eintrag erstellt")} · ${action.optString("title")}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)}
     } else {
         Text(t("Dein Wissen, verbunden."),style=MaterialTheme.typography.titleLarge)
         if(!status.optBoolean("obsidian"))Text(t("Binde deinen Obsidian-Ordner auf dem Server ein und setze OBSIDIAN_VAULT_PATH. Deine Markdown-Dateien bleiben in deinem Vault."))
         else {
+            BrainGraph(graph,language){target->if(dirty)pending=target else open(target)}
             OutlinedButton(enabled=!busy,onClick={if(dirty)pending="" else open("")},shape=RectangleShape){Text(t("Neue Vault-Notiz"))}
             for(i in 0 until notes.length()){val n=notes.getJSONObject(i);OutlinedButton(enabled=!busy,onClick={if(dirty)pending=n.getString("path") else open(n.getString("path"))},shape=RectangleShape){Text(n.getString("path"))}}
             if(selected!=null){
                 OutlinedTextField(path,{path=it;dirty=true},readOnly=selected!!.optString("version").isNotBlank(),label={Text(t("Dateipfad im Vault"))},modifier=Modifier.fillMaxWidth(),shape=RectangleShape)
                 OutlinedTextField(content,{content=it.take(200000);dirty=true},label={Text(t("Markdown-Inhalt"))},minLines=10,modifier=Modifier.fillMaxWidth(),shape=RectangleShape)
-                Button(enabled=connected&&!busy&&dirty&&path.isNotBlank(),shape=RectangleShape,onClick={busy=true;error="";scope.launch{try{selected=JSONObject(api.call("/obsidian/note","PUT",JSONObject().put("path",path).put("content",content).put("version",selected!!.optString("version"))));dirty=false;notes=JSONArray(api.call("/obsidian/notes"))}catch(e:Exception){error=e.message?:"Request failed"}finally{busy=false}}}){Text(t("Speichern")+if(dirty)" *" else "")}
+                Button(enabled=connected&&!busy&&dirty&&path.isNotBlank(),shape=RectangleShape,onClick={busy=true;error="";scope.launch{try{selected=JSONObject(api.call("/obsidian/note","PUT",JSONObject().put("path",path).put("content",content).put("version",selected!!.optString("version"))));dirty=false;notes=JSONArray(api.call("/obsidian/notes"));graph=JSONObject(api.call("/obsidian/graph"))}catch(e:Exception){error=e.message?:"Request failed"}finally{busy=false}}}){Text(t("Speichern")+if(dirty)" *" else "")}
             }
         }
     }

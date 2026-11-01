@@ -1,12 +1,14 @@
 # Deployment auf monopol-ai.de mit Coolify
 
-## Musik, KI-Agent und Obsidian (Version 0.6)
+## Musik, KI-Agent und Obsidian (Version 0.7)
 
 Unter Einstellungen lassen sich die vier **Layouts Index, Studio, Control und Focus** jeweils mit **Violet, Paper, Amber und Cyan** kombinieren. Sprache, Layout und Palette werden pro Gerät gespeichert. Alle 16 Kombinationen verwenden dieselben Daten. Die Layouts verändern Navigation, Inhaltsaufteilung sowie Aufgaben-, Musik-, Agenten- und Vault-Ansichten. Näheres und Designreferenzen: [layouts.md](layouts.md).
 
-Der Musik-Tab bettet **https://vault.monopol-ai.de/spotify** ein; dafür sind keine neuen Coolify-Variablen erforderlich. Eigene Musikprojekte mit Beschreibung, Release-Datum, Link/Dateipfad und Status bleiben darunter verfügbar. Die externe Seite braucht gegebenenfalls eine eigene Anmeldung. Ein direkter Link ist vorhanden, falls Browser oder Dienst die Einbettung blockieren. Persönliche Anmeldung im externen Dienst wurde nicht getestet. Für den Stand 0.6 auf `main` redeployen; Android-Version 0.6.0 separat installieren.
+Der Musik-Tab bettet **https://vault.monopol-ai.de/spotify** ein; dafür sind keine neuen Coolify-Variablen erforderlich. Eigene Musikprojekte mit Beschreibung, Release-Datum, Link/Dateipfad und Status bleiben darunter verfügbar. Die externe Seite braucht gegebenenfalls eine eigene Anmeldung. Ein direkter Link ist vorhanden, falls Browser oder Dienst die Einbettung blockieren. Persönliche Anmeldung im externen Dienst wurde nicht getestet. Für den aktuellen Stand auf `main` redeployen; Android-Version 0.7.0 separat installieren.
 
 Kalender und alte Notizen bleiben aus der Navigation entfernt; ihre Daten bleiben erhalten und im Agentenkontext enthalten. Eine Spotify-Daten-API wird durch das Einbetten nicht eingerichtet.
+
+**Neu in 0.7:** `mono_frame_brain` als Wissens-Vault mit Graph und Schreibwerkzeugen, außerdem Aufgaben-Erinnerungen über Browser-Push und Android. Einrichtung, Grenzen und Gerätetest: [brain-reminders.md](brain-reminders.md). Benachrichtigungen in den Settings pro Gerät freigeben. Das bestehende Obsidian-Volume bleibt erhalten; fehlende Startnotizen werden angelegt.
 
 ### Agent aktivieren
 
@@ -20,7 +22,7 @@ In Coolify folgende optionale Variablen setzen, jeweils für **Build time und Ru
 
 Beispiel für Ollama im selben Docker-Netz: `AI_BASE_URL=http://ollama:11434/v1`, `AI_MODEL=<Name des bereits geladenen toolfähigen Modells>`. `localhost` im API-Container bezeichnet den Container selbst, nicht deinen PC oder einen anderen Dienst. Siehe [Ollamas offizielle Kompatibilitätsdokumentation](https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx).
 
-Beim Absenden einer Nachricht übermittelt das Backend den aktuellen Bestand aus Aufgaben, Musikprojekten, bisherigen Notizen/Terminen und Gesundheitswerten an diesen Anbieter. Der Agent hat **Lesezugriff**, kann gezielt Obsidian-Notizen nachladen und führt keine Schreib-, Shell- oder Bankaktionen aus. Schlüssel und Login-Passwort werden nicht als Kontext mitgesendet. Der Chat bleibt im Arbeitsspeicher des jeweiligen Clients, nicht dauerhaft in der App-Datenbank. Datenverarbeitung beim KI-Anbieter richtet sich nach dessen Bedingungen.
+Beim Absenden einer Nachricht übermittelt das Backend den aktuellen Bestand aus Aufgaben, Musikprojekten, bisherigen Notizen/Terminen und Gesundheitswerten an diesen Anbieter. Der Agent hat Lesezugriff auf gespeicherte App-Daten und kann auf Aufforderung Aufgaben, Musikprojekte und Vault-Notizen anlegen und ändern. Shell, Bankaktionen und Zugangsschlüssel sind keine Werkzeuge. Erfolgreiche Änderungen werden protokolliert. Schlüssel und Login-Passwort werden nicht als Kontext mitgesendet. Der sichtbare Chat bleibt im Arbeitsspeicher des Clients. Für den Schutz vor doppelten Änderungen werden Request-Ergebnisse 24 Stunden und frühere Änderungsstände 30 Tage in der Core-Datenbank gespeichert. Datenverarbeitung beim KI-Anbieter richtet sich nach dessen Bedingungen.
 
 Ohne API-Konfiguration bleibt der Rest der App nutzbar. Testaufrufe sind mit gemocktem Anbieter geprüft; eine echte Verbindung benötigt deine Werte. Grenzen: 30 Chatnachrichten pro Anfrage, 12.000 Zeichen pro Nachricht, 180.000 Zeichen App-Kontext, fünf Provider-Runden mit höchstens acht Note-Abfragen je Runde. Pro gelesener Notiz werden maximal 30.000 Zeichen an die KI geschickt und Kürzungen markiert.
 

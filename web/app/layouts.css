@@ -1785,3 +1785,183 @@
     padding-left: 18px;
   }
 }
+
+.brain-vault {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.brain-graph {
+  padding: 22px;
+  min-width: 0;
+}
+.graph-heading,
+.graph-controls,
+.graph-selection {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.graph-heading {
+  justify-content: space-between;
+}
+.graph-heading h3 {
+  font-size: 22px;
+  letter-spacing: -1px;
+  font-weight: 400;
+  margin: 12px 0;
+}
+.graph-heading > span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.graph-controls {
+  margin: 16px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.graph-controls input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.graph-controls button,
+.graph-selection button {
+  border: 1px solid var(--line);
+  padding: 10px;
+  font-size: 10px;
+}
+.graph-canvas {
+  background: var(--bg);
+  position: relative;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.graph-canvas svg {
+  display: block;
+  width: 100%;
+  height: 420px;
+}
+.graph-edge {
+  stroke: var(--line);
+  stroke-width: 1.2;
+}
+.graph-edge.highlighted {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.graph-node {
+  fill: var(--muted);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+.graph-node.selected,
+.graph-node.neighbor {
+  fill: var(--accent);
+}
+.graph-canvas g {
+  cursor: pointer;
+}
+.graph-canvas g:focus-visible {
+  outline: none;
+}
+.graph-canvas g:focus-visible rect {
+  stroke: var(--text);
+  stroke-width: 4;
+}
+.graph-canvas text {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+.graph-empty {
+  position: absolute;
+  inset: 40% 10%;
+  text-align: center;
+  color: var(--muted);
+}
+.graph-selection {
+  padding: 16px 0;
+  min-height: 60px;
+  font-size: 11px;
+}
+.graph-selection strong {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.graph-selection button {
+  margin-left: auto;
+}
+.graph-limits {
+  font-size: 10px;
+  color: var(--muted);
+}
+.reminder-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+.reminder-toggle input {
+  width: 18px !important;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.notification-settings {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.agent-actions p,
+.agent-activity p {
+  font-size: 11px;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.agent-activity {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  font-size: 11px;
+}
+.agent-activity summary {
+  cursor: pointer;
+}
+@media (max-width: 800px) {
+  .brain-graph {
+    padding: 14px;
+  }
+  .graph-canvas svg {
+    height: 310px;
+  }
+  .graph-controls {
+    gap: 8px;
+  }
+  .graph-controls input {
+    flex-basis: 100%;
+  }
+}
+
+.reminder-toggle input[type="checkbox"],
+.module-form input[type="checkbox"] {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--bg);
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 0;
+  vertical-align: middle;
+}
+.reminder-toggle input[type="checkbox"]:checked::after,
+.module-form input[type="checkbox"]:checked::after {
+  content: "\2713";
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}

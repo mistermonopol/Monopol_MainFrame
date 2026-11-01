@@ -142,7 +142,7 @@ def test_openai_endpoint_and_token_parameter(client,monkeypatch,base):
         assert payload['model']=='configured-model'
         assert payload['max_completion_tokens']==2000
         assert 'max_tokens' not in payload
-        assert 'tools' not in payload  # No vault: no unsupported tools required.
+        assert any(t['function']['name']=='save_item' for t in payload['tools'])
         return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Ready'}}]})
     mock_ai(monkeypatch,handle,base)
     result=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
@@ -231,6 +231,122 @@ def test_ai_provider_diagnostic_is_localized(client,monkeypatch):
     assert response.status_code==502
     assert 'API-Schlüssel' in response.json()['detail']
     assert 'HTTP 401' in response.json()['detail']
+
+
+def test_agent_writes_tasks_and_brain_with_idempotent_replay(client,monkeypatch,tmp_path):
+    import httpx,json
+    from app.config import settings
+    calls=[]
+    def handle(request):
+        payload=json.loads(request.content);calls.append(payload)
+        if len(calls)==1:
+            assert 'Remember my mix notes' in payload['messages'][-1]['content']
+            tools=[{'id':'create-task','type':'function','function':{'name':'save_item','arguments':json.dumps({'kind':'tasks','data':{'title':'Mix revision','due':'2026-12-01','reminders_enabled':True,'remind_at':'2026-12-01T10:00:00+01:00'}})}},
+                   {'id':'save-brain','type':'function','function':{'name':'write_obsidian_note','arguments':json.dumps({'path':'Memory.md','content':'# Mix\nUse take two. [[Music]]','version':''})}}]
+            return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':None,'tool_calls':tools}}]})
+        assert json.loads(payload['messages'][-1]['content'])['saved'] is True
+        return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Saved your task and memory.'}}]})
+    mock_ai(monkeypatch,handle)
+    monkeypatch.setattr(settings,'obsidian_vault_path',str(tmp_path))
+    body={'request_id':'12345678-1234-4234-8234-123456789abc','messages':[{'role':'user','content':'Remember my mix notes and add a task.'}]}
+    response=client.post('/api/v1/agent/chat',json=body)
+    assert response.status_code==200
+    assert len(response.json()['actions'])==2
+    task=client.get('/api/v1/items/tasks').json()[0]
+    assert task['title']=='Mix revision'
+    assert task['remind_at']=='2026-12-01T10:00:00+01:00'
+    assert (tmp_path/'Memory.md').read_text()=='# Mix\nUse take two. [[Music]]'
+    assert client.post('/api/v1/agent/chat',json=body).json()==response.json()
+    assert len(calls)==2
+    assert len(client.get('/api/v1/items/tasks').json())==1
+    revision=response.json()['actions'][1]['revision_id']
+    assert client.get('/api/v1/agent/revisions/'+revision).json()['after']['content'].startswith('# Mix')
+    assert client.get('/api/v1/agent/activity').json()[0]['finished'] is True
+
+
+def test_agent_patch_preserves_fields_and_rejects_stale_versions(client):
+    from app.agent_tools import execute
+    from fastapi import HTTPException
+    task=client.post('/api/v1/items/tasks',json={'title':'Keep description','description':'important','due':'2026-12-01','reminders_enabled':False}).json()
+    result,action=execute('save_item',{'kind':'tasks','id':task['id'],'version':1,'data':{'completed':True}})
+    updated=client.get('/api/v1/items/tasks').json()[0]
+    assert updated['completed'] and updated['description']=='important' and not updated['reminders_enabled']
+    with pytest.raises(HTTPException) as error:
+        execute('save_item',{'kind':'tasks','id':task['id'],'version':1,'data':{'title':'stale'}})
+    assert error.value.status_code==409
+    with pytest.raises(ValueError):execute('shell',{'command':'forbidden'})
+    with pytest.raises(HTTPException):execute('write_obsidian_note',{'path':'../escape.md','content':'no','version':''})
+
+
+def test_brain_initialization_preserves_existing_notes_and_graph_links(client,monkeypatch,tmp_path):
+    from app.config import settings
+    from app.brain import initialize_brain
+    monkeypatch.setattr(settings,'obsidian_vault_path',str(tmp_path))
+    (tmp_path/'AI_Brain.md').write_text('# My existing brain\n[[Music|sound]]\n`[[Hidden]]`\n```md\n[[NotReal]]\n```',encoding='utf-8')
+    initialize_brain();initialize_brain()
+    assert (tmp_path/'AI_Brain.md').read_text().startswith('# My existing brain')
+    assert len(list(tmp_path.glob('*.md')))==4
+    (tmp_path/'Projects').mkdir()
+    (tmp_path/'Projects/Plan.md').write_text('[track](../Music.md#mix) [[Inbox]] [[Missing]]',encoding='utf-8')
+    result=client.get('/api/v1/obsidian/graph').json()
+    assert result['name']=='mono_frame_brain'
+    assert any(e['source']=='AI_Brain.md' and e['target']=='Music.md' for e in result['edges'])
+    assert any({e['source'],e['target']}=={'Projects/Plan.md','Music.md'} for e in result['edges'])
+    assert result['unresolved']==1
+    assert client.get('/api/v1/obsidian/graph',headers={'Authorization':'Bearer invalid'}).status_code==401
+
+
+def test_task_reminder_times_and_due_filter(client):
+    from app.reminders import scheduled_at,due_reminders
+    from datetime import timezone
+    assert scheduled_at({'due':'2026-07-01'}).isoformat()=='2026-07-01T07:00:00+00:00'
+    assert scheduled_at({'due':'2026-12-01'}).isoformat()=='2026-12-01T08:00:00+00:00'
+    assert scheduled_at({'due':'2026-12-01','completed':True}) is None
+    assert scheduled_at({'due':'2026-12-01','reminders_enabled':False}) is None
+    assert scheduled_at({'remind_at':'2026-12-01T12:30:00+01:00'}).hour==11
+    client.post('/api/v1/items/tasks',json={'title':'due','due':'2026-12-01'})
+    client.post('/api/v1/items/tasks',json={'title':'done','due':'2026-12-01','completed':True})
+    client.post('/api/v1/items/tasks',json={'title':'off','due':'2026-12-01','reminders_enabled':False})
+    assert not due_reminders(datetime(2026,12,1,7,59,tzinfo=timezone.utc))
+    assert [n['title'] for n in due_reminders(datetime(2026,12,1,8,1,tzinfo=timezone.utc))]==['due']
+    assert not due_reminders(datetime(2026,12,3,8,1,tzinfo=timezone.utc))
+
+
+def push_subscription():
+    import base64,secrets
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+    key=ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(serialization.Encoding.X962,serialization.PublicFormat.UncompressedPoint)
+    encode=lambda raw:base64.urlsafe_b64encode(raw).decode().rstrip('=')
+    return {'endpoint':'https://fcm.googleapis.com/fcm/send/test-only','keys':{'p256dh':encode(key),'auth':encode(secrets.token_bytes(16))},'language':'en'}
+
+
+def test_push_config_subscription_encryption_and_deduplication(client,monkeypatch,tmp_path):
+    import app.reminders as reminder
+    from datetime import timezone
+    import json
+    subscription=push_subscription()
+    monkeypatch.chdir(tmp_path)  # pywebpush's curl mode writes an encrypted payload file.
+    assert client.post('/api/v1/notifications/subscriptions',json=subscription).status_code==200
+    config=client.get('/api/v1/notifications/config').json()
+    assert 'private' not in config and len(config['public_key'])>60
+    assert client.get('/api/v1/notifications/config').json()['public_key']==config['public_key']
+    assert client.post('/api/v1/notifications/subscriptions',json={**subscription,'endpoint':'https://127.0.0.1/internal'}).status_code==422
+    client.post('/api/v1/items/tasks',json={'title':'Due task','due':'2026-12-01'})
+    monkeypatch.setattr(reminder,'now',lambda:datetime(2026,12,1,8,1,tzinfo=timezone.utc))
+    sent=[]
+    real_push=reminder.webpush
+    def transport(**kwargs):
+        sent.append(kwargs)
+        # Real encryption and VAPID signing, but no network delivery.
+        curl=real_push(**{**kwargs,'curl':True})
+        assert 'Authorization' in curl or 'authorization' in curl
+    monkeypatch.setattr(reminder,'webpush',transport)
+    reminder.dispatch();reminder.dispatch()
+    assert len(sent)==1
+    assert json.loads(sent[0]['data'])['body']=='Due task'
+    assert client.post('/api/v1/notifications/unsubscribe',json={'endpoint':subscription['endpoint']}).status_code==200
+    assert client.get('/api/v1/notifications/due',headers={'Authorization':'Bearer invalid'}).status_code==401
 
 
 def test_error_language_defaults_to_english_and_supports_german(client):
