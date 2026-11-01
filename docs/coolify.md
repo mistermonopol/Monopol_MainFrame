@@ -1,111 +1,79 @@
-# Deployment mit Coolify
+# Deployment auf monopol-ai.de mit Coolify
 
-Das Repository enthält dafür **`compose.coolify.yaml`**. Es baut Web, API und PostgreSQL gemeinsam. Die Datenbankinitialisierung liegt im PostgreSQL-Image; eine lokale `.env` oder ein zur Laufzeit gemounteter Git-Checkout wird nicht benötigt. Die API erstellt das initiale Schema beim Start, bevor sie Anfragen annimmt.
+`compose.coolify.yaml` baut Web, API und PostgreSQL gemeinsam. Web und Android verwenden **https://monopol-ai.de** und deine persönliche Passwort-Anmeldung. Eine zusätzliche Netzwerk-App wird nicht benötigt.
 
-## 1. Zugriff festlegen
+## 1. DNS und Domain
 
-Der ursprüngliche private Betrieb bleibt der empfohlene Weg:
+Beim DNS-Anbieter einen **A-Record** mit Host `@` auf die öffentliche IPv4 des Coolify-Servers setzen. DNS enthält keinen Port. Optional einen CNAME für `www` auf `monopol-ai.de` setzen und diesen Host zusätzlich in Coolify konfigurieren. Ein vorhandener AAAA-Record muss auf die passende erreichbare IPv6 desselben Servers zeigen.
 
-- Tailscale auf Coolify-Server, PC und Pixel einrichten und die Geräte im selben Tailnet freigeben.
-- Auf dem Coolify-Server `tailscale status` ausführen und dessen vollständigen Gerätenamen ermitteln, z. B. `server.example-tailnet.ts.net`.
-- HTTPS im Tailnet aktivieren. Die externe App-Adresse wird `https://server.example-tailnet.ts.net`.
-- In Coolify **keine öffentliche Domain** für diese Anwendung eintragen. Automatisch erzeugte Domains entfernen. Tailscale Funnel bleibt aus.
-- Die Coolify-Datei veröffentlicht nur `127.0.0.1:3080` auf dem Host; API und Datenbank haben keine Host-Ports.
+In Coolify die Domain ausschließlich dem Dienst **`web`** zuordnen:
 
-Eine bewusst öffentlich erreichbare HTTPS-Domain ist ebenfalls möglich; siehe Abschnitt 7. Beide Varianten brauchen keine Codeänderungen.
+| Einstellung | Wert |
+| --- | --- |
+| Protokoll | HTTPS |
+| Domain | `monopol-ai.de` |
+| Interner Port | `3000` |
+| Pfad | leer |
 
-## 2. Persönliches Passwort festlegen
+Bei einem gemeinsamen URL-Feld lautet der Wert `https://monopol-ai.de:3000`. Besucher verwenden **https://monopol-ai.de** ohne Portangabe. TCP 80 und 443 müssen den Coolify-Proxy erreichen. Die Compose-Datei veröffentlicht keine Host-Ports; der Proxy erreicht `web` über das interne Docker-Netz. API und Datenbank erhalten keine eigene öffentliche Domain.
 
-Web und Android melden sich direkt mit deinem `ADMIN_PASSWORD` an. Es ist kein externes Konto, keine E-Mail-Adresse und kein OAuth-Client erforderlich. Ein Passwort mit mindestens 16 Zeichen wählen und ausschließlich in Coolify hinterlegen; beispielsweise mit `openssl rand -hex 32` erzeugen und im Passwortmanager speichern.
+## 2. Anwendung anlegen
 
-Bei einem Update von der vorherigen Anmeldung `ADMIN_PASSWORD` neu hinzufügen. `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAIL` und `SESSION_SECRET` sind nicht mehr erforderlich und können aus Coolify entfernt werden. Vorhandene Datenbankpasswörter und das Datenvolume beibehalten. Nach dem Deployment erneut anmelden und die aktualisierte Android-App installieren.
+1. **New Resource / Application** wählen und das Repository `mistermonopol/Monopol_MainFrame` über GitHub-App, Deploy Key oder als öffentliches Repository auswählen.
+2. Branch **`main`**, Build Pack / Strategy **Docker Compose**, Base Directory **`/`** setzen.
+3. Docker Compose Location **`/compose.coolify.yaml`** einstellen; bei einem relativen Eingabefeld `compose.coolify.yaml` verwenden.
+4. **Custom Build Command und Custom Start Command vollständig leeren**. Der Dateiname gehört ausschließlich in Docker Compose Location. **Raw Compose aus** lassen. Keine zusätzliche vorgegebene Netzwerkverbindung aktivieren.
+5. Speichern, Compose-Datei laden und prüfen, dass `db`, `api` und `web` erscheinen. Die Domain gemäß Abschnitt 1 bei `web` eintragen.
 
-## 3. Anwendung in Coolify anlegen
+## 3. Umgebungsvariablen
 
-1. In deinem Projekt und der gewünschten Umgebung **New Resource / Application** wählen.
-2. GitHub-App oder Deploy Key verwenden und das Repository `mistermonopol/Monopol_MainFrame` auswählen. Ein privates Repository benötigt die entsprechende Leseberechtigung.
-3. Branch **`main`**, Build Pack / Build Strategy **Docker Compose**, Base Directory **`/`** setzen.
-4. Docker Compose Location **`/compose.coolify.yaml`** einstellen; falls das Feld relative Pfade erwartet, `compose.coolify.yaml` verwenden.
-5. Speichern und die Compose-Datei laden. Es müssen `db`, `api` und `web` erscheinen. Nicht auf Nixpacks/Railpack oder den einzelnen Web-Dockerfile wechseln.
-6. Normale Compose-Verarbeitung verwenden, **Raw Compose aus** lassen. Keine eigenen Build- oder Startbefehle eintragen und keine Verbindung zu einem zusätzlichen vorgegebenen Netzwerk aktivieren.
-
-## 4. Umgebungsvariablen setzen
-
-Unter **Environment Variables → Production** die folgenden Werte eintragen. Geheimnisse gehören ausschließlich in Coolify. Für diese Compose-Anwendung muss jede referenzierte Variable **sowohl während des Builds als auch zur Laufzeit verfügbar** sein: **Build time = Available during build** und **Runtime = Available in the container** aktivieren. In älteren Oberflächen heißen die Optionen beispielsweise **Build Variable** und **Runtime Variable**.
-
-Der Grund: Auch `docker compose build` löst die Variablen der gesamten Compose-Datei auf. Eine ausschließlich zur Laufzeit verfügbare Variable fehlt dann in Coolifys `build-time.env`, und der Build bricht bereits vor dem Bauen der Images ab. Dafür sind keine zusätzlichen `ARG`-Definitionen in den Dockerfiles und keine `NEXT_PUBLIC_`-Variablen nötig.
+Unter **Environment Variables → Production** diese Werte eintragen und jeweils **Build time und Runtime aktivieren**. Auch `docker compose build` löst die Variablen der gesamten Datei auf; Runtime-only-Werte fehlen in Coolifys `build-time.env`.
 
 | Variable | Wert |
 | --- | --- |
-| `PUBLIC_URL` | `https://server.example-tailnet.ts.net` – kein Port, kein Pfad, kein abschließender Slash |
-| `ADMIN_PASSWORD` | Persönliches Anmeldepasswort mit mindestens 16 Zeichen |
-| `POSTGRES_PASSWORD` | Eigenständiges zufälliges Passwort für den Datenbankadministrator |
+| `PUBLIC_URL` | `https://monopol-ai.de` – ohne Port, Pfad oder abschließenden Slash |
+| `ADMIN_PASSWORD` | Eigenes Anmeldepasswort mit mindestens 16 Zeichen |
+| `POSTGRES_PASSWORD` | Eigenständiges zufälliges Datenbankadministrator-Passwort |
 | `APP_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Kerndaten |
 | `HEALTH_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Gesundheitsdaten |
-| `PRIVATE_WEB_PORT` | Optional, Standard `3080`; bei einem Portkonflikt einen freien Host-Port wählen |
-| `BACKUP_STACK_ID` | Optional, Standard `everything`; bei mehreren Instanzen je Anwendung einen eindeutigen Wert verwenden |
+| `BACKUP_STACK_ID` | Optional, Standard `everything`; bei mehreren Instanzen eindeutigen Wert je Anwendung setzen |
 
-Für jedes der vier Secrets separat `openssl rand -hex 32` auf einem vertrauenswürdigen Rechner ausführen. Hexadezimale Passwörter können ohne zusätzliche URL-Kodierung in den internen Datenbank-URLs verwendet werden. `DATABASE_URL`, `HEALTH_DATABASE_URL` und `COOKIE_SECURE` setzt die Compose-Datei selbst.
+Für jedes der vier Secrets separat `openssl rand -hex 32` ausführen und die Werte im Passwortmanager speichern. Hexadezimale Datenbankpasswörter benötigen keine zusätzliche URL-Kodierung. `DATABASE_URL`, `HEALTH_DATABASE_URL` und `COOKIE_SECURE` setzt die Compose-Datei selbst. Geheimnisse ausschließlich in Coolify hinterlegen.
 
-Die drei Datenbankpasswörter müssen vor dem **ersten** Deployment endgültig gesetzt sein. Bei einem bestehenden Volume ändern neue Umgebungswerte die PostgreSQL-Rollenpasswörter nicht automatisch. Ein Passwortwechsel muss in PostgreSQL und anschließend in Coolify erfolgen. Bei einem Fehler kein Volume mit persönlichen Daten löschen.
+Bei vorhandenen Variablen die Build-/Runtime-Einstellungen ausdrücklich speichern. In Coolify-Versionen mit Developer-View-Flags setzt `# coolify: buildtime=true runtime=true` direkt oberhalb einer Variablen beide Optionen. Werte ohne Flags einzufügen kann bestehende Scope-Einstellungen beibehalten. Danach **Deploy/Redeploy**, nicht nur Restart wählen.
 
-Bei bereits angelegten Variablen die Build-/Runtime-Einstellungen für jede Variable ausdrücklich bearbeiten und speichern. Das erneute Einfügen derselben Werte ohne Flags im Developer View behält vorhandene Scope-Einstellungen bei. In Coolify-Versionen mit Flag-Unterstützung setzt eine Zeile `# coolify: buildtime=true runtime=true` direkt oberhalb der jeweiligen Variablen beide Optionen. Nach einer Änderung der Build-Verfügbarkeit **Deploy/Redeploy** verwenden, nicht nur Restart.
+Bestehende Datenbankpasswörter und das Datenvolume beim Update beibehalten: Eine Änderung der Umgebungswerte ändert PostgreSQL-Rollenpasswörter nicht automatisch. Alte Anmeldeanbieter-Variablen und `PRIVATE_WEB_PORT` werden nicht mehr benötigt und können aus Coolify entfernt werden.
 
-## 5. Deployen und privat erreichbar machen
+## 4. Deployen und nutzen
 
-1. **Deploy** wählen. Deployment Logs prüfen: erst Datenbankinitialisierung, dann API-Schema und API-Start, dann Web. Alle drei Dienste sollen gesund sein.
-2. Auf dem Coolify-Host prüfen:
+1. **Deploy** wählen. Die Datenbank initialisiert Rollen und Schemas; danach erstellt die API Tabellen und startet. Alle drei Dienste sollen gesund sein.
+2. `https://monopol-ai.de/api/v1/healthz` aufrufen. Erwartet: `{"status":"ok"}`.
+3. **https://monopol-ai.de** öffnen und mit `ADMIN_PASSWORD` anmelden.
+4. In der aktualisierten Android-App unter Einstellungen **https://monopol-ai.de** und dasselbe Passwort verwenden. Eine früher gespeicherte andere Serveradresse einmal ändern. Danach Health-Connect-Leseberechtigungen erteilen und die Synchronisation aktivieren.
 
-   ```sh
-   curl --fail http://127.0.0.1:3080/api/v1/healthz
-   ```
+Die Anmeldung benötigt kein externes Konto. Passwortänderungen mit anschließendem API-Neustart widerrufen bestehende Sitzungen; danach erneut anmelden.
 
-   Erwartet: `{"status":"ok"}`. Bei verändertem `PRIVATE_WEB_PORT` diesen Port verwenden.
-3. Auf demselben Host die private HTTPS-Weiterleitung aktivieren:
+## 5. Daten, Backups und Updates
 
-   ```sh
-   tailscale serve --bg http://127.0.0.1:3080
-   tailscale serve status
-   ```
-
-   Falls auf diesem Tailscale-Gerätenamen bereits ein anderer Dienst auf HTTPS-Port 443 liegt, ihn nicht überschreiben. Einen separaten Tailscale-Knoten für Everything verwenden oder die bestehende Zuordnung gezielt anpassen. Die App erwartet eine eigene Basis-URL ohne Pfad.
-4. Die von Tailscale angezeigte HTTPS-Adresse muss exakt mit `PUBLIC_URL` übereinstimmen. Bei einer Korrektur den Wert ändern und in Coolify erneut deployen.
-5. Auf PC und Pixel Tailscale aktivieren, die HTTPS-Adresse öffnen und mit deinem persönlichen Passwort anmelden.
-6. In Android unter Einstellungen dieselbe Basisadresse eintragen. Danach Health-Connect-Leseberechtigungen erteilen und Synchronisation aktivieren.
-
-Tailscale Serve benötigt den **Host-Port 3080**, nicht den internen Container-Port 3000. Bereits eingerichtete Coolify-Domains für andere Apps bleiben davon unberührt.
-
-## 6. Daten, Backups und Updates
-
-- Das benannte Volume `postgres` ist dauerhaft. Coolify kann seinen tatsächlichen Namen mit einer Ressourcenkennung versehen. Bei Redeployments dieselbe Anwendung und dasselbe Volume weiterverwenden.
-- Vor Nutzung mit echten Daten eine verschlüsselte Sicherung und Wiederherstellung auf einem separaten Testsystem prüfen. `ops/backup.sh` unterstützt Coolify über `BACKUP_STACK_ID`: Es findet genau den laufenden Datenbankcontainer mit dem entsprechenden Label, unabhängig von dessen wechselndem Coolify-Namen. Bei keinem oder mehreren Treffern bricht es ab.
-- Für den Backuptimer die Skripte wie im README unter `/opt/everything` auf dem Host bereitstellen und `age` installieren. In `/etc/everything-backup.env` **beide** Werte setzen: `AGE_RECIPIENT=age1...` und `BACKUP_STACK_ID=everything` (bzw. deinen in Coolify gesetzten Wert). Dann die mitgelieferten Systemd-Units aktivieren und einmal manuell ausführen. Ohne `BACKUP_STACK_ID` verwendet das Skript weiterhin die lokale `compose.yaml`. Verschlüsselte Sicherungen zusätzlich auf einen zweiten Host kopieren.
-- Zur Wiederherstellung den über das Label identifizierten `db`-Container verwenden: Dump mit `age` entschlüsseln, per `docker cp` als `/tmp/life.dump` hineinkopieren und `docker exec <db-container> pg_restore -U postgres -d life --clean --if-exists /tmp/life.dump` ausführen. Währenddessen Web und API in Coolify stoppen; zuerst in einer separaten Testinstanz prüfen. Anschließend Dumpdateien entfernen, Sitzungen mit `TRUNCATE core.sessions` widerrufen und die Anwendung starten. Ein Volume-Snapshot ohne geprüfte Wiederherstellung ersetzt diesen Test nicht.
-- Unter GitHub Actions zeigen die Prüfungen für API, Web, Android und das vollständige Docker-Deployment den Stand des gepushten Commits. Eine Debug-APK wird im Android-Job als Artifact bereitgestellt.
-- Nach Updates in Coolify deployen und `/api/v1/healthz`, Anmeldung und Datenanzeige prüfen. Die aktuelle Initialmigration legt Tabellen idempotent an; zukünftige Schemaänderungen benötigen explizite Migrationen. Alte Anwendungsversionen nicht ungeprüft gegen ein später geändertes Schema starten.
-
-## 7. Optional: öffentliche Coolify-Domain
-
-Nur wählen, wenn du die App absichtlich außerhalb des VPN erreichbar machen möchtest:
-
-1. Einen eigenen Namen, z. B. `life.example.com`, per DNS auf den Coolify-Server zeigen lassen.
-2. In Coolify unter **Domains** ausschließlich den Dienst **`web`** wählen. HTTPS, Host `life.example.com` und internen Port **`3000`** einstellen. In Oberflächen mit einem gemeinsamen URL-Feld entspricht das `https://life.example.com:3000`.
-3. `PUBLIC_URL=https://life.example.com` setzen, **ohne `:3000`**. Neu deployen und TLS prüfen.
-4. Für `api` und `db` keine Domains oder Host-Ports hinzufügen. `/api/...` läuft über den Web-Proxy zur API. Der private Loopback-Port kann bestehen bleiben; er wird dadurch nicht öffentlich.
-5. In Android die neue Basisadresse verwenden. Eine vorher eingerichtete Tailscale-Serve-Zuordnung zu dieser App wird für diesen Weg nicht benötigt.
+- Das benannte Volume `postgres` bleibt bei Redeployments erhalten. Coolify kann dem tatsächlichen Namen eine Ressourcenkennung hinzufügen. Dieselbe Anwendung und dasselbe Volume weiterverwenden.
+- `ops/backup.sh` findet den Datenbankcontainer anhand des Labels `BACKUP_STACK_ID`. Bei keinem oder mehreren Treffern bricht das Skript ab.
+- Für den Backuptimer die Skripte wie im README unter `/opt/everything` auf dem Host bereitstellen und `age` installieren. In `/etc/everything-backup.env` `AGE_RECIPIENT=age1...` und `BACKUP_STACK_ID=everything` bzw. den abweichenden Coolify-Wert setzen. Die mitgelieferten Systemd-Units aktivieren, einmal manuell prüfen und verschlüsselte Sicherungen zusätzlich auf einen zweiten Host kopieren.
+- Eine Wiederherstellung zunächst auf einem separaten Testsystem prüfen: Dump entschlüsseln, in den ausgewählten Datenbankcontainer kopieren und `pg_restore -U postgres -d life --clean --if-exists /tmp/life.dump` ausführen. Währenddessen Web und API stoppen. Danach Dumpdateien entfernen, Sitzungen mit `TRUNCATE core.sessions` widerrufen und die Anwendung starten. Weitere Details stehen im README.
+- GitHub Actions prüft API, Web, Android und den vollständigen Docker-Stack. Die Test-APK steht im Android-Job als Artifact bereit. Für dauerhafte App-Updates einen eigenen gesicherten Release-Keystore verwenden.
+- Nach Updates Health-Endpunkt, Anmeldung und Datenanzeige prüfen. Die aktuelle Initialmigration erstellt Tabellen idempotent; zukünftige Schemaänderungen benötigen explizite Migrationen.
 
 ## Häufige Fehler
 
 | Fehler | Prüfung |
 | --- | --- |
-| `required variable ... is missing` oder `Defaulting to a blank string` beim Build | Alle fünf Pflichtwerte unter Production gesetzt? Für jede Variable Build time **und** Runtime aktivieren, speichern und neu deployen. Runtime-only-Werte fehlen in `build-time.env`. |
-| Coolify findet Compose nicht | Branch `main`, Base Directory `/`, Compose Location `/compose.coolify.yaml` |
-| Passwortauthentifizierung fehlgeschlagen | Stimmen Coolify-Werte und bereits initialisierte PostgreSQL-Rollen überein? |
-| „Passwort ist falsch“ | Passwort exakt wie `ADMIN_PASSWORD` eingeben; nach Änderungen neu deployen |
-| Zu viele Anmeldeversuche | Eine Minute warten; die Begrenzung gilt gemeinsam für Web und Android |
-| „Ungültiger Ursprung“ beim Speichern | Browseradresse und `PUBLIC_URL` müssen identisch sein; nach Änderung erneut deployen |
-| Öffentlich „No available server“ | Domain an `web`, interner Port 3000, Web gesund, API und Datenbank gesund |
-| Private URL nicht erreichbar | Tailscale auf beiden Geräten aktiv, ACL erlaubt Zugriff, Serve zeigt auf Host-Port 3080 |
-| `port is already allocated` | `PRIVATE_WEB_PORT` ändern und Tailscale Serve auf denselben neuen Port setzen |
+| `compose: command not found` | Custom Build Command und Custom Start Command vollständig leeren; Docker Compose als Build Pack wählen |
+| `required variable ... is missing` | Alle fünf Pflichtwerte unter Production mit Build time und Runtime setzen, speichern und neu deployen |
+| Compose-Datei nicht gefunden | Branch `main`, Base Directory `/`, Compose Location `/compose.coolify.yaml` |
+| Datenbank-Passwortauthentifizierung fehlgeschlagen | Coolify-Werte und bereits initialisierte PostgreSQL-Rollen müssen übereinstimmen |
+| „Ungültiger Ursprung“ | Browseradresse und `PUBLIC_URL` müssen exakt übereinstimmen: `https://monopol-ai.de` |
+| „No available server“ | Domain an `web`, interner Port 3000; Web, API und Datenbank müssen gesund sein |
+| Zertifikat oder DNS falsch | A-/AAAA-Records, TCP 80/443 und konfigurierte HTTPS-Domain prüfen |
+| „Passwort ist falsch“ | Exakt den Wert von `ADMIN_PASSWORD` verwenden; nach Änderungen neu deployen |
+| Zu viele Anmeldeversuche | Eine Minute warten; Web und Android teilen sich die Begrenzung |
 
-Grundlage: [Coolify: Docker Compose aus Git](https://coolify.io/docs/applications/builds/docker-compose), [Umgebungsvariablen und Build-/Runtime-Scope](https://coolify.io/docs/applications/configuration/environment-variables) und [Anwendungs- und Domainkonfiguration](https://coolify.io/docs/applications/configuration/general).
+Grundlage: [Docker Compose](https://coolify.io/docs/applications/builds/docker-compose), [Umgebungsvariablen](https://coolify.io/docs/applications/configuration/environment-variables) und [Domains](https://coolify.io/docs/core/networking/domains).

@@ -50,10 +50,7 @@ services:
   web:
     build: ./web
     expose: ["3000"]
-    # Private Tailscale ingress. Coolify's proxy can also reach port 3000
-    # through the stack network if you deliberately configure a public domain.
-    ports:
-      - "127.0.0.1:${PRIVATE_WEB_PORT:-3080}:3000"
+    # Coolify routes monopol-ai.de to this internal port without host mappings.
     depends_on:
       api: {condition: service_healthy}
     healthcheck:

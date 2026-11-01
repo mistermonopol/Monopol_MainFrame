@@ -638,8 +638,8 @@ export default function Home() {
             <section className="card panel settings">
               <h3>Dein privater Workspace</h3>
               <p>
-                Zugriff über dein privates VPN. Gesundheitsdaten bleiben von
-                deinen übrigen Daten getrennt.
+                Zugriff über HTTPS mit deinem persönlichen Passwort.
+                Gesundheitsdaten bleiben von deinen übrigen Daten getrennt.
               </p>
               <h4>Lokaler Cache</h4>
               <p>

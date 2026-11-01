@@ -2,29 +2,29 @@
 
 Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Eigene Aufgaben, Notizen und einmalige Termine teilen sich einen Server. Health Connect liefert ausschließlich Tageswerte. Die übrigen Integrationen sind sichtbar als **Nicht verbunden**.
 
-**Coolify:** Verwende `compose.coolify.yaml`. Die vollständige Anleitung für Umgebungsvariablen, Passwort-Anmeldung, privaten Tailscale-Zugriff und die optionale öffentliche Domain steht in [docs/coolify.md](docs/coolify.md).
+**Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://monopol-ai.de`, Umgebungsvariablen und Passwort-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
 
-## Start auf einem privaten Linux-Server
+## Docker Compose ohne Coolify
 
-Voraussetzungen: Docker Engine mit Compose v2, Tailscale mit aktiviertem HTTPS und verschlüsselter Serverdatenträger. Keine Ports des Routers öffnen; Tailscale Funnel **nicht** aktivieren. Tailnet-ACLs müssen den Zugriff auf deine Geräte beschränken.
+Voraussetzungen: Docker Engine mit Compose v2, HTTPS-Reverse-Proxy und verschlüsselter Serverdatenträger. Für Coolify stattdessen die verlinkte Anleitung und `compose.coolify.yaml` verwenden.
 
 1. `.env.example` nach `.env` kopieren. Vier unabhängige Secrets mit `openssl rand -hex 32` erzeugen: `ADMIN_PASSWORD` für die Anmeldung und drei Datenbankpasswörter. Das Anmeldepasswort muss mindestens 16 Zeichen haben; für die Datenbankpasswörter nur URL-sichere hexadezimale Zeichen verwenden.
-2. `PUBLIC_URL` auf `https://<server>.<tailnet>.ts.net` setzen, ohne abschließenden Slash. Es wird kein externes Konto und kein OAuth-Client benötigt.
+2. `PUBLIC_URL=https://monopol-ai.de` setzen, ohne abschließenden Slash. Es wird kein externes Konto und kein OAuth-Client benötigt.
 3. `docker compose up --build -d`. Die einmalige Datenbankinitialisierung legt getrennte Rollen und Schemas `core` und `health` an; der Migrationsdienst erstellt die initialen Tabellen. Passwörter nach der ersten Initialisierung erfordern zusätzlich eine Änderung der PostgreSQL-Rollen, nicht nur der `.env`.
-4. Auf dem Host `tailscale serve --bg http://127.0.0.1:3000` ausführen. Den vorgeschlagenen HTTPS-Namen mit `PUBLIC_URL` abgleichen. HTTPS endet im privaten Tailscale-Proxy; Web und API teilen denselben Ursprung. Datenbank und API haben keine veröffentlichten Ports.
+4. Den HTTPS-Reverse-Proxy für `monopol-ai.de` auf `127.0.0.1:3000` weiterleiten lassen. Web und API teilen denselben Ursprung; Datenbank und API haben keine veröffentlichten Ports. Bei Verwendung der separaten Coolify-Konfiguration übernimmt Coolify die HTTPS-Weiterleitung.
 5. URL auf dem PC öffnen und mit deinem `ADMIN_PASSWORD` anmelden. Dashboard beginnt leer. Es gibt keinen Demo-Login und keine Beispieldaten im produktiven Datenbestand.
 
-Prüfen: `docker compose ps`, `curl https://<server>.<tailnet>.ts.net/api/v1/healthz`. Der Endpunkt prüft beide Datenbankverbindungen. `docker compose logs --tail 100 api` zeigt Betriebsfehler ohne absichtliche Protokollierung von Inhalten, Passwörtern oder Tokens. Der Server muss korrektes NTP verwenden. HTTP-Access-Logs sind deaktiviert.
+Prüfen: `docker compose ps`, `curl https://monopol-ai.de/api/v1/healthz`. Der Endpunkt prüft beide Datenbankverbindungen. `docker compose logs --tail 100 api` zeigt Betriebsfehler ohne absichtliche Protokollierung von Inhalten, Passwörtern oder Tokens. Der Server muss korrektes NTP verwenden. HTTP-Access-Logs sind deaktiviert.
 
 ## Android auf dem Pixel
 
-Android 14+, Health Connect und Tailscale vorausgesetzt. Android Studio mit JDK 17 und SDK 36 verwenden. Der mitgelieferte Gradle-Wrapper lädt Version 8.11.1 mit SHA-256-Prüfung. Unter Windows: `android/gradlew.bat -p android testDebugUnitTest assembleDebug`; unter Linux/macOS: `sh android/gradlew -p android testDebugUnitTest assembleDebug`.
+Android 14+, Health Connect und Internetverbindung vorausgesetzt. Android Studio mit JDK 17 und SDK 36 verwenden. Der mitgelieferte Gradle-Wrapper lädt Version 8.11.1 mit SHA-256-Prüfung. Unter Windows: `android/gradlew.bat -p android testDebugUnitTest assembleDebug`; unter Linux/macOS: `sh android/gradlew -p android testDebugUnitTest assembleDebug`.
 
 Für private Release-APKs einen eigenen Keystore erzeugen und die Umgebungsvariablen `ANDROID_KEYSTORE_PATH` (absolut), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` setzen. Dann `sh android/gradlew -p android assembleRelease`; APK unter `android/app/build/outputs/apk/release/`. Keystore separat sichern und niemals einchecken. Für spätere Updates denselben Signierschlüssel verwenden.
 
 APK privat installieren. In **Einstellungen** die gleiche HTTPS-Basisadresse und dein persönliches `ADMIN_PASSWORD` eintragen und **Anmelden** wählen. Das Passwort wird nur zur Anmeldung über HTTPS übertragen und nicht auf dem Gerät gespeichert. Android speichert den widerrufbaren Sitzungstoken im durch Android Keystore verschlüsselten Speicher.
 
-In **Gesundheit** Leseberechtigungen für Schritte, Schlaf, Ruhepuls und Gewicht einzeln freigeben. Die App fragt keine Schreibberechtigungen ab. Hintergrundzugriff ist optional und wird nur bei verfügbarer Gerätefunktion angeboten. Ohne diese Freigabe funktioniert die Synchronisation beim Öffnen und über **Aktualisieren**. WorkManager plant ungefähr stündlich; Android und VPN-Erreichbarkeit bestimmen den tatsächlichen Zeitpunkt. Bei längeren Offline-Phasen werden beim nächsten erfolgreichen Abgleich die letzten 30 Tage neu berechnet.
+In **Gesundheit** Leseberechtigungen für Schritte, Schlaf, Ruhepuls und Gewicht einzeln freigeben. Die App fragt keine Schreibberechtigungen ab. Hintergrundzugriff ist optional und wird nur bei verfügbarer Gerätefunktion angeboten. Ohne diese Freigabe funktioniert die Synchronisation beim Öffnen und über **Aktualisieren**. WorkManager plant ungefähr stündlich; Android und Server-Erreichbarkeit bestimmen den tatsächlichen Zeitpunkt. Bei längeren Offline-Phasen werden beim nächsten erfolgreichen Abgleich die letzten 30 Tage neu berechnet.
 
 Die App liest keine Daten älter als den verfügbaren Health-Connect-Zeitraum und fordert keine zusätzliche historische Berechtigung an. Berechtigungen können in Health Connect widerrufen werden. Synchronisation stoppen verhindert weitere Uploads; bereits importierte Daten bleiben bis zur separaten Löschung erhalten.
 
@@ -42,7 +42,7 @@ Die App liest keine Daten älter als den verfügbaren Health-Connect-Zeitraum un
 
 ## API und Entwicklung
 
-OpenAPI: `/openapi.json`, interaktive Dokumentation: `/docs` (nur im Tailnet bereitstellen).
+Das Backend stellt OpenAPI unter `/openapi.json` und interaktive Dokumentation unter `/docs` intern bereit. Der öffentliche Web-Proxy leitet `/api/...` an das Backend weiter.
 
 | Schnittstelle | Verhalten |
 | --- | --- |

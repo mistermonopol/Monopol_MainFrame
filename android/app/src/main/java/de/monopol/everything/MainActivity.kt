@@ -184,12 +184,12 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun SettingsContent() {
-        var server by remember { mutableStateOf(store.get("server")) }
+        var server by remember { mutableStateOf(store.get("server").ifBlank { "https://monopol-ai.de" }) }
         var password by remember { mutableStateOf("") }
         var confirmDelete by remember { mutableStateOf(false) }
-        Text("Private Verbindung", style = MaterialTheme.typography.titleMedium)
-        Text("Trage die HTTPS-Adresse und dein persönliches Passwort ein. Bei privatem Zugriff muss Tailscale aktiv sein.")
-        OutlinedTextField(server, { server = it }, label = { Text("https://dein-server.ts.net") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Text("Serververbindung", style = MaterialTheme.typography.titleMedium)
+        Text("Melde dich mit deinem persönlichen Passwort bei https://monopol-ai.de an.")
+        OutlinedTextField(server, { server = it }, label = { Text("Serveradresse (HTTPS)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(password, { password = it }, label = { Text("Passwort") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
         Button(onClick = {
             val normalized = server.trim().trimEnd('/')

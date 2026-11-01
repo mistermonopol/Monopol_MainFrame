@@ -11,8 +11,8 @@ jobs:
         run: docker compose -f compose.coolify.yaml --env-file .env.example up --build -d --wait --wait-timeout 180
       - name: Check Web to API to PostgreSQL
         run: |
-          curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:3080/api/v1/healthz
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3080/api/v1/session)" = 401
+          docker compose -f compose.coolify.yaml --env-file .env.example exec -T web node -e "fetch('http://127.0.0.1:3000/api/v1/healthz').then(async r=>{const body=await r.json();if(!r.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))"
+          docker compose -f compose.coolify.yaml --env-file .env.example exec -T web node -e "fetch('http://127.0.0.1:3000/api/v1/session').then(r=>process.exit(r.status===401?0:1)).catch(()=>process.exit(1))"
       - name: Deployment logs
         if: failure()
         run: docker compose -f compose.coolify.yaml --env-file .env.example logs --no-color
