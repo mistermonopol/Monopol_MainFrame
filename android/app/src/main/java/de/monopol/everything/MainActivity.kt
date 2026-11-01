@@ -14,6 +14,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
     private val api get() = Api(store)
     private var language by mutableStateOf("en")
     private var theme by mutableStateOf("dark")
+    private var layout by mutableStateOf("index")
     private fun t(source: String) = Localizer.text(source,language)
     private fun dateText(value: String) = runCatching { Instant.parse(value).atZone(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)) }.getOrDefault(value)
 
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         store = Store(this)
         language = store.get("language").takeIf { it=="de" } ?: "en"
+        layout = store.get("layout").takeIf { it in listOf("index","studio","control","focus") } ?: "index"
         theme = store.get("theme").takeIf { it in listOf("light","amber","cyan") } ?: "dark"
         data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
@@ -140,10 +143,11 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var expanded by remember { mutableStateOf(store.get("sidebarCollapsed") != "true") }
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            val workspaceWidth=maxWidth
             if (maxWidth >= 840.dp) {
                 Row(Modifier.fillMaxSize()) {
-                    Surface(Modifier.width(if (expanded) 282.dp else 76.dp).fillMaxHeight(), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        NavigationContent(expanded, if (expanded) "Navigation einklappen" else "Navigation ausklappen", {
+                    Surface(Modifier.width(if (!expanded) 76.dp else when(layout){"studio"->112.dp;"control"->210.dp;"focus"->224.dp;else->244.dp}).fillMaxHeight(), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        NavigationContent(expanded && layout!="studio", if (expanded) "Navigation einklappen" else "Navigation ausklappen", {
                             expanded = !expanded
                             store.put("sidebarCollapsed", (!expanded).toString())
                         }) { screen = it }
@@ -152,6 +156,14 @@ class MainActivity : ComponentActivity() {
                         WorkspaceContent {
                             expanded = !expanded
                             store.put("sidebarCollapsed", (!expanded).toString())
+                        }
+                    }
+                    if(layout=="control" && workspaceWidth>=1350.dp) Surface(Modifier.width(220.dp).fillMaxHeight(),color=MaterialTheme.colorScheme.surfaceVariant) {
+                        Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(24.dp)) {
+                            Text("INSPECTOR / LIVE",style=MaterialTheme.typography.labelSmall)
+                            Text(t("Im Blick"),style=MaterialTheme.typography.headlineSmall)
+                            listOf("Offene Aufgaben" to (data.optJSONArray("tasks")?:JSONArray()).objects().count{!it.optBoolean("completed")},"Musikprojekte" to (data.optJSONArray("music")?.length()?:0),"Erfasste Tage" to (data.optJSONObject("health")?.optJSONArray("days")?.length()?:0)).forEach{(label,value)->Text(t(label));Text(value.toString(),style=MaterialTheme.typography.displaySmall,color=MaterialTheme.colorScheme.primary)}
+                            Text(t("Aktueller App-Bestand. Keine Beispieldaten."),style=MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -163,7 +175,17 @@ class MainActivity : ComponentActivity() {
                             scope.launch { drawerState.close() }
                         }
                     }
-                }) { WorkspaceContent { scope.launch { drawerState.open() } } }
+                }) {
+                    Column(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(1f)){WorkspaceContent { scope.launch { drawerState.open() } }}
+                        if(layout=="studio" || layout=="focus") Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                            listOf("Übersicht" to Icons.Outlined.Dashboard,"Aufgaben" to Icons.Outlined.CheckBox,"Musik" to Icons.Outlined.MusicNote,"KI-Agent" to Icons.Outlined.SmartToy).forEach{(label,icon)->
+                                Column(Modifier.weight(1f).clickable{screen=label}.padding(vertical=12.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(icon,t(label),tint=if(screen==label)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant);Text(t(label),fontSize=8.sp)}
+                            }
+                            SquareIconButton(onClick={scope.launch{drawerState.open()}}){Icon(Icons.Outlined.MoreHoriz,t("Weitere Module"))}
+                        }
+                    }
+                }
             }
         }
     }
@@ -190,10 +212,10 @@ class MainActivity : ComponentActivity() {
                 SquareIconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronRight, t(toggleLabel)) }
                 Spacer(Modifier.height(20.dp))
             }
-            items.forEach { (label, icon) ->
+            items.forEachIndexed { index, (label, icon) ->
                 if (expanded) NavigationDrawerItem(
                     label = { Text(t(label)) }, selected = screen == label, onClick = { onSelect(label) },
-                    icon = { Icon(icon, null) }, shape = RoundedCornerShape(0.dp),
+                    icon = { if(layout=="index") Text(String.format("%02d",index+1),style=MaterialTheme.typography.labelSmall) else Icon(icon, null) }, shape = RoundedCornerShape(0.dp),
                     colors = NavigationDrawerItemDefaults.colors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -221,7 +243,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),horizontalAlignment=if(layout=="focus") Alignment.CenterHorizontally else Alignment.Start) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 SquareIconButton(onClick = onOpenNavigation) { Icon(Icons.Outlined.Menu, t("Navigation öffnen")) }
                 Column(Modifier.weight(1f).padding(start = 8.dp)) {
@@ -229,34 +251,22 @@ class MainActivity : ComponentActivity() {
                     Text(t(screen), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if(layout=="control") Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                listOf("Aufgaben","Musik","Gesundheit","KI-Agent","Obsidian").forEach{label->OutlinedButton(onClick={screen=label},shape=RectangleShape){Text(t(label),fontSize=10.sp)}}
+            }
+            Column(Modifier.weight(1f).then(if(layout=="focus")Modifier.widthIn(max=720.dp) else Modifier.fillMaxWidth()).verticalScroll(rememberScrollState()).padding(if(layout=="control")12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(t(if (screen == "Übersicht") "Willkommen im MainFrame." else screen), style = MaterialTheme.typography.headlineSmall)
                 Text(LocalDate.now(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)), style = MaterialTheme.typography.labelMedium)
                 if (message.isNotEmpty()) Card(shape = RectangleShape) { Text(t(message), Modifier.padding(14.dp)) }
                 Text(t(if (connected) "Server verbunden" else "Offline / Anmeldung nötig"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (store.get("loaded").isNotEmpty()) Text("${t("Letzter geladener Stand:")} ${dateText(store.get("loaded"))}", style = MaterialTheme.typography.labelSmall)
                 OutlinedButton(onClick = { refresh(sync = true) }, enabled = !busy, shape = RectangleShape) { Text(t(if (busy) "Wird geladen …" else "Aktualisieren")) }
-                if (screen == "Übersicht") {
-                    Card(shape = RectangleShape) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Monopol_MainFrame your App for Everything", style = MaterialTheme.typography.titleLarge)
-                        Text(t("Deine Aufgaben, Termine und Gesundheit."))
-                    } }
-                    Text(t("Heute"), style = MaterialTheme.typography.titleMedium)
-                    val days = data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()
-                    StepsChart(days,language)
-                    val today = days.objects().find { it.optString("day") == LocalDate.now(ZoneId.of("Europe/Berlin")).toString() }
-                    HealthCard(today)
-                    Text(t("Meine Aufgaben"), style = MaterialTheme.typography.titleMedium)
-                    ItemList("tasks", data.optJSONArray("tasks") ?: JSONArray(), 4)
-                    Text(t("Als Nächstes"), style = MaterialTheme.typography.titleMedium)
-                    Text(t("Musikprojekte"), style=MaterialTheme.typography.titleMedium)
-                    ItemList("music", data.optJSONArray("music") ?: JSONArray(), 3)
-                    OutlinedButton(onClick={screen="KI-Agent"},shape=RectangleShape){Text(t("KI-Agent öffnen"))}
-                }
+                if (screen == "Übersicht") OverviewContent()
+                if(screen=="Musik") SpotifyDashboard(language)
                 val kind = when (screen) { "Aufgaben" -> "tasks"; "Musik" -> "music"; else -> null }
                 if (kind != null) {
                     Button(onClick = { editor = kind to null }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Neuer Eintrag")) }
-                    ItemList(kind, data.optJSONArray(kind) ?: JSONArray())
+                    if(kind=="tasks") TaskRegister() else ItemList(kind, data.optJSONArray(kind) ?: JSONArray())
                 }
                 if (screen == "Gesundheit") {
                     Text(t("Health Connect liest nur freigegebene Daten. Übertragen werden Tageswerte, keine Rohmessreihen."))
@@ -273,6 +283,100 @@ class MainActivity : ComponentActivity() {
             }
         }
         editor?.let { (kind, item) -> Editor(kind, item) }
+    }
+
+    @Composable private fun TaskRegister() {
+        val tasks=data.optJSONArray("tasks")?:JSONArray()
+        val open=JSONArray(tasks.objects().filter{!it.optBoolean("completed")})
+        val done=JSONArray(tasks.objects().filter{it.optBoolean("completed")})
+        if(layout=="studio") BoxWithConstraints {
+            if(maxWidth>=600.dp) Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) {
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(12.dp)){Text("${t("Offen")} / ${open.length()}",color=MaterialTheme.colorScheme.primary);ItemList("tasks",open)}
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(12.dp)){Text("${t("Erledigt")} / ${done.length()}");ItemList("tasks",done)}
+            } else Column(verticalArrangement=Arrangement.spacedBy(18.dp)){Text("${t("Offen")} / ${open.length()}",color=MaterialTheme.colorScheme.primary);ItemList("tasks",open);HorizontalDivider();Text("${t("Erledigt")} / ${done.length()}");ItemList("tasks",done)}
+        } else if(layout=="focus") Column(Modifier.border(1.dp,MaterialTheme.colorScheme.outline,RectangleShape).padding(18.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {Text(t("Dein nächster Schritt"),style=MaterialTheme.typography.labelSmall);ItemList("tasks",open);Text(t("Erledigt"));ItemList("tasks",done)}
+        else Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text((if(layout=="control")"REGISTER / TASKS" else "01 / ${t("Meine Aufgaben")}")+" — ${open.length()} / ${tasks.length()}",style=MaterialTheme.typography.labelSmall);ItemList("tasks",tasks)}
+    }
+
+    @Composable private fun OverviewContent() {
+        val tasks=data.optJSONArray("tasks")?:JSONArray()
+        val projects=data.optJSONArray("music")?:JSONArray()
+        val days=data.optJSONObject("health")?.optJSONArray("days")?:JSONArray()
+        val open=tasks.objects().count{!it.optBoolean("completed")}
+        val today=days.objects().find{it.optString("day")==LocalDate.now(ZoneId.of("Europe/Berlin")).toString()}
+        val primary=MaterialTheme.colorScheme.primary
+        when(layout) {
+            "studio"->{
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.Bottom){Column(Modifier.weight(1f)){Text("Monopol_MainFrame your App for Everything",fontSize=9.sp);Text(t("In Arbeit"),fontSize=34.sp,color=primary)};Text("MF\nSTUDIO",Modifier.background(primary).padding(12.dp),color=MaterialTheme.colorScheme.background,fontSize=18.sp)}
+                BoxWithConstraints {
+                    if(maxWidth>=700.dp) Row(horizontalArrangement=Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(1.2f)){OverviewMusic(projects,true)}
+                        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(16.dp)){OverviewAgent();OverviewTasks(tasks)}
+                    } else Column(verticalArrangement=Arrangement.spacedBy(18.dp)){OverviewMusic(projects,true);OverviewAgent();OverviewTasks(tasks)}
+                }
+                StepsChart(days,language);HealthCard(today)
+            }
+            "control"->{
+                Text("CONTROL / 03 — Monopol_MainFrame your App for Everything",fontSize=9.sp,color=primary)
+                Row(Modifier.fillMaxWidth().border(1.dp,MaterialTheme.colorScheme.outline,RectangleShape)) {
+                    listOf("Offen" to open,"Erledigt" to tasks.length()-open,"Musikprojekte" to projects.length()).forEach{(label,value)->Column(Modifier.weight(1f).padding(12.dp)){Text(t(label),fontSize=9.sp);Text(value.toString(),fontSize=36.sp,color=primary)}}
+                }
+                HealthCard(today)
+                BoxWithConstraints {
+                    if(maxWidth>=700.dp)Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){Column(Modifier.weight(1.3f)){StepsChart(days,language);OverviewMusic(projects,false)};Column(Modifier.weight(1f)){OverviewTasks(tasks);OverviewAgent()}}
+                    else Column(verticalArrangement=Arrangement.spacedBy(12.dp)){StepsChart(days,language);OverviewTasks(tasks);OverviewMusic(projects,false);OverviewAgent()}
+                }
+            }
+            "focus"->{
+                Text("Monopol_MainFrame your App for Everything",fontSize=9.sp)
+                Text(LocalDate.now(ZoneId.of("Europe/Berlin")).dayOfMonth.toString().padStart(2,'0'),fontSize=64.sp,color=primary)
+                Text(t("Eins nach")+"\n"+t("dem anderen."),fontSize=46.sp,lineHeight=48.sp)
+                Text(t("Du musst nicht alles auf einmal tun."),style=MaterialTheme.typography.bodySmall)
+                Text("${tasks.length()-open} / ${tasks.length()} ${t("Aufgaben erledigt")}",fontSize=10.sp,color=primary)
+                Column(Modifier.border(1.dp,MaterialTheme.colorScheme.outline,RectangleShape).padding(18.dp),verticalArrangement=Arrangement.spacedBy(24.dp)){OverviewTasks(tasks);OverviewAgent();OverviewMusic(projects,false);StepsChart(days,language);HealthCard(today)}
+            }
+            else->{
+                Text("Monopol_MainFrame your App for Everything",fontSize=9.sp)
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val headlineSize=if(maxWidth<380.dp)30.sp else 48.sp
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.Bottom){Text(t("Alles,")+"\n"+t("was zählt."),Modifier.weight(1f),fontSize=headlineSize,lineHeight=headlineSize);Column(Modifier.width(80.dp),horizontalAlignment=Alignment.End){Text(open.toString().padStart(2,'0'),fontSize=64.sp,color=primary);Text(t("offene Aufgaben"),fontSize=9.sp)}}
+                }
+                HorizontalDivider(color=primary)
+                Text(t("Dein Tag, auf einer Seite."),style=MaterialTheme.typography.labelSmall)
+                BoxWithConstraints {
+                    if(maxWidth>=700.dp) Row(horizontalArrangement=Arrangement.spacedBy(26.dp)){Column(Modifier.weight(1.5f),verticalArrangement=Arrangement.spacedBy(16.dp)){OverviewTasks(tasks);StepsChart(days,language)};Column(Modifier.weight(1f)){OverviewMusic(projects,true);OverviewAgent()}}
+                    else Column(verticalArrangement=Arrangement.spacedBy(18.dp)){OverviewTasks(tasks);StepsChart(days,language);OverviewMusic(projects,false);OverviewAgent()}
+                }
+                HealthCard(today)
+            }
+        }
+    }
+
+    @Composable private fun OverviewTasks(tasks:JSONArray) {
+        Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Text("01 / ${t("Meine Aufgaben")}",style=MaterialTheme.typography.titleMedium)
+            ItemList("tasks",tasks,if(layout=="control")6 else 4)
+            OutlinedButton(onClick={screen="Aufgaben"},shape=RectangleShape){Text(t("Zum Tagesplan"))}
+        }
+    }
+
+    @Composable private fun OverviewMusic(projects:JSONArray,large:Boolean) {
+        val active=projects.objects().firstOrNull{!it.optBoolean("completed")}
+        Surface(Modifier.fillMaxWidth(),shape=RectangleShape,color=if(layout=="studio")MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
+            Column(Modifier.padding(if(large)24.dp else 18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                Text("02 / ${t("Musikprojekte")}",style=MaterialTheme.typography.labelSmall)
+                if(large)Text((active?.optString("title")?:"Main Frame").split(" ").filter{it.isNotBlank()}.take(2).joinToString(""){it.take(1)}.uppercase(),fontSize=86.sp,color=MaterialTheme.colorScheme.primary)
+                Text(active?.optString("title")?:t("Noch ungeschrieben."),fontSize=if(large)30.sp else 23.sp)
+                Text(active?.optString("description")?.take(180)?.ifBlank{null}?:t("Ein Track beginnt mit einer Idee. Gib ihr einen Platz."),fontSize=12.sp)
+                OutlinedButton(onClick={screen="Musik"},shape=RectangleShape){Text(t("Musik öffnen"))}
+            }
+        }
+    }
+
+    @Composable private fun OverviewAgent() {
+        Surface(onClick={screen="KI-Agent"},shape=RectangleShape,color=if(layout=="studio")MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface) {
+            Row(Modifier.fillMaxWidth().padding(20.dp),horizontalArrangement=Arrangement.spacedBy(16.dp),verticalAlignment=Alignment.CenterVertically){Text("*",fontSize=56.sp);Column{Text("MAINFRAME AGENT",fontSize=9.sp);Text(t("Denk es laut."),fontSize=23.sp);Text(t("Fragen, Ideen und dein ganzer Workspace."),fontSize=10.sp)}}
+        }
     }
 
     @Composable private fun HealthCard(day: JSONObject?) {
@@ -305,10 +409,21 @@ class MainActivity : ComponentActivity() {
 
     @Composable private fun SettingsContent() {
         Text(t("Darstellung"),style=MaterialTheme.typography.titleMedium)
+        Text(t("Layout"),style=MaterialTheme.typography.titleMedium)
+        Text(t("Vier Arbeitsweisen. Jede mit jeder Farbe kombinierbar."),style=MaterialTheme.typography.bodySmall)
+        listOf("index" to "Index","studio" to "Studio","control" to "Control","focus" to "Focus").forEachIndexed{index,(value,label)->
+            OutlinedButton(onClick={layout=value;store.put("layout",value)},modifier=Modifier.fillMaxWidth(),shape=RectangleShape,colors=ButtonDefaults.outlinedButtonColors(containerColor=if(layout==value)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
+                Text("0${index+1}",Modifier.padding(end=18.dp),color=MaterialTheme.colorScheme.primary)
+                Column(Modifier.weight(1f)) {Text(label);Text(t(when(value){"index"->"Große Typografie, Kapitel und ein geteilter Überblick.";"studio"->"Asymmetrische Arbeitsfläche für Projekte und Ideen.";"control"->"Kompakte Instrumente, Datenraster und Live-Inspektor.";else->"Ein Tagesablauf, eine Spalte, dein nächster Schritt."}),fontSize=10.sp)}
+                if(layout==value)Icon(Icons.Outlined.Check,null)
+            }
+        }
+        Text(t("Farbwelt"),style=MaterialTheme.typography.titleMedium)
+        Text(t("Die Farbe verändert nicht das Layout."),style=MaterialTheme.typography.bodySmall)
         Text(t("Sprache"))
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("en" to "English","de" to "Deutsch").forEach { (value,label) -> OutlinedButton(onClick={language=value;store.put("language",value);message=""}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(language==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(label)} } }
         Text(t("Design"))
-        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Violet Mainframe","light" to "Paper Studio","amber" to "Amber Terminal","cyan" to "Cyan Grid").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Violet","light" to "Paper","amber" to "Amber","cyan" to "Cyan").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
         Text(t("Einstellungen werden auf diesem Gerät gespeichert."),style=MaterialTheme.typography.bodySmall)
         var server by remember { mutableStateOf(store.get("server").ifBlank { "https://monopol-ai.de" }) }
         var password by remember { mutableStateOf("") }

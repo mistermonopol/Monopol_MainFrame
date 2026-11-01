@@ -1,8 +1,12 @@
 # Deployment auf monopol-ai.de mit Coolify
 
-## Musik, KI-Agent und Obsidian (Version 0.5)
+## Musik, KI-Agent und Obsidian (Version 0.6)
 
-Unter Einstellungen stehen **Violet Mainframe**, **Paper Studio**, **Amber Terminal** und **Cyan Grid** bereit. Sprache und Theme werden pro Gerät gespeichert. Kalender und alte Notizen sind aus der Navigation entfernt; ihre Daten bleiben erhalten und sind im Agentenkontext enthalten. Das Musikmodul verwaltet eigene Projekte mit Beschreibung, Release-Datum, Link/Dateipfad und Veröffentlichungsstatus. Es verbindet keine Künstler-Dashboards automatisch.
+Unter Einstellungen lassen sich die vier **Layouts Index, Studio, Control und Focus** jeweils mit **Violet, Paper, Amber und Cyan** kombinieren. Sprache, Layout und Palette werden pro Gerät gespeichert. Alle 16 Kombinationen verwenden dieselben Daten. Die Layouts verändern Navigation, Inhaltsaufteilung sowie Aufgaben-, Musik-, Agenten- und Vault-Ansichten. Näheres und Designreferenzen: [layouts.md](layouts.md).
+
+Der Musik-Tab bettet **https://vault.monopol-ai.de/spotify** ein; dafür sind keine neuen Coolify-Variablen erforderlich. Eigene Musikprojekte mit Beschreibung, Release-Datum, Link/Dateipfad und Status bleiben darunter verfügbar. Die externe Seite braucht gegebenenfalls eine eigene Anmeldung. Ein direkter Link ist vorhanden, falls Browser oder Dienst die Einbettung blockieren. Persönliche Anmeldung im externen Dienst wurde nicht getestet. Für den Stand 0.6 auf `main` redeployen; Android-Version 0.6.0 separat installieren.
+
+Kalender und alte Notizen bleiben aus der Navigation entfernt; ihre Daten bleiben erhalten und im Agentenkontext enthalten. Eine Spotify-Daten-API wird durch das Einbetten nicht eingerichtet.
 
 ### Agent aktivieren
 

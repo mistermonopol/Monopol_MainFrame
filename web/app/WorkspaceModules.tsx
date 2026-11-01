@@ -1,4 +1,5 @@
 "use client";
+import SpotifyFrame from "./SpotifyFrame";
 import { useEffect, useState } from "react";
 import { Language, translator } from "./i18n";
 import {
@@ -114,6 +115,7 @@ export default function WorkspaceModules({
   }
   return (
     <section className="module-workspace">
+      {page === "music" && <SpotifyFrame language={language} />}
       <div className="module-banner">
         <span className="module-number">
           {page === "music" ? "01" : page === "agent" ? "02" : "03"} / MAINFRAME

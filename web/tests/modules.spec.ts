@@ -5,6 +5,12 @@ test("four themes persist and new music agent vault navigation works", async ({
   isMobile,
 }) => {
   let project: any = null;
+  await page.route("https://vault.monopol-ai.de/spotify", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<h1>Spotify test dashboard</h1>",
+    }),
+  );
   let note = {
     path: "Music/Release.md",
     content: "# My release",
@@ -77,6 +83,9 @@ test("four themes persist and new music agent vault navigation works", async ({
     page.locator("aside").getByRole("button", { name: "Notes", exact: true }),
   ).toHaveCount(0);
   await nav("Music");
+  await expect(
+    page.locator('iframe[title="Spotify Dashboard"]'),
+  ).toHaveAttribute("src", "https://vault.monopol-ai.de/spotify");
   await page.getByRole("button", { name: "New project", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("New single");
   await page.getByLabel("Description", { exact: true }).fill("Finish the mix");

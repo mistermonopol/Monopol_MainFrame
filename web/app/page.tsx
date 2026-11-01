@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Language, Theme, localeFor, translator, slogan } from "./i18n";
-import StepChart from "./StepChart";
+import DashboardLayouts from "./DashboardLayouts";
+import TaskWorkspace from "./TaskWorkspace";
+import { LayoutName, layouts, validLayout } from "./appearance";
 import WorkspaceModules from "./WorkspaceModules";
 import {
   Music,
@@ -9,8 +11,6 @@ import {
   Gem,
   LayoutDashboard,
   CheckSquare,
-  NotebookPen,
-  CalendarDays,
   HeartPulse,
   Settings,
   ArrowUpRight,
@@ -19,11 +19,6 @@ import {
   CheckSquare2,
   RefreshCw,
   LogOut,
-  Layers3,
-  Activity,
-  Moon,
-  Footprints,
-  Weight,
   X,
   Trash2,
   Menu,
@@ -52,6 +47,7 @@ type Day = {
 };
 type Data = {
   tasks: Item[];
+  music?: Item[];
   notes: Item[];
   events: Item[];
   health: { days: Day[]; last_sync: string | null };
@@ -66,6 +62,7 @@ const empty: Data = {
 export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
   const [theme, setTheme] = useState<Theme>("dark");
+  const [layout, setLayout] = useState<LayoutName>("index");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const t = translator(language);
   const locale = localeFor(language);
@@ -97,6 +94,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
+      setLayout(validLayout(localStorage.getItem("monopol-layout")));
       setLanguage(
         localStorage.getItem("monopol-language") === "de" ? "de" : "en",
       );
@@ -114,11 +112,13 @@ export default function Home() {
     if (!preferencesReady) return;
     document.documentElement.lang = language;
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.layout = layout;
     try {
       localStorage.setItem("monopol-language", language);
       localStorage.setItem("monopol-theme", theme);
+      localStorage.setItem("monopol-layout", layout);
     } catch {}
-  }, [language, theme, preferencesReady]);
+  }, [language, theme, layout, preferencesReady]);
   const [page, setPage] = useState("dashboard"),
     [data, setData] = useState<Data>(empty),
     [online, setOnline] = useState(true),
@@ -276,13 +276,6 @@ export default function Home() {
       return false;
     }
   }
-  const today = data.health.days.find(
-    (d) =>
-      d.day ===
-      new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(
-        new Date(),
-      ),
-  );
   const enabled = online && auth;
   function taskRow(task: Item) {
     return (
@@ -321,6 +314,7 @@ export default function Home() {
   }
   return (
     <div
+      data-page={page}
       className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileMenuOpen ? " menu-open" : ""}`}
     >
       {mobileMenuOpen && (
@@ -383,7 +377,7 @@ export default function Home() {
         </div>
         <div className="workspace">{t("PERSÖNLICHER WORKSPACE")}</div>
         <nav aria-label={t("Hauptnavigation")}>
-          {navigation.map(([id, label, Icon]) => (
+          {navigation.map(([id, label, Icon], index) => (
             <button
               key={id}
               className={page === id ? "active" : ""}
@@ -395,6 +389,9 @@ export default function Home() {
                 setMobileMenuOpen(false);
               }}
             >
+              <span className="nav-number" aria-hidden="true">
+                {String(index + 1).padStart(2, "0")}
+              </span>
               <Icon size={19} />
               <span className="nav-label">{label}</span>
               {id === "tasks" && (
@@ -421,6 +418,55 @@ export default function Home() {
           </div>
         </div>
       </aside>
+      <div
+        className="mobile-dock"
+        role="navigation"
+        aria-label={t("Schnellnavigation")}
+      >
+        {navigation.slice(0, 4).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            aria-label={label}
+            aria-current={page === id ? "page" : undefined}
+            onClick={() => setPage(id)}
+          >
+            <Icon size={19} />
+            <span>{label}</span>
+          </button>
+        ))}
+        <button
+          aria-label={t("Weitere Module")}
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={19} />
+          <span>{t("Mehr")}</span>
+        </button>
+      </div>
+      <div className="control-inspector" aria-label={t("Workspace-Inspektor")}>
+        <span className="inspector-label">INSPECTOR / LIVE</span>
+        <h2>{t("Im Blick")}</h2>
+        <div>
+          <small>{t("Offene Aufgaben")}</small>
+          <strong>{data.tasks.filter((task) => !task.completed).length}</strong>
+        </div>
+        <div>
+          <small>{t("Musikprojekte")}</small>
+          <strong>{data.music?.length || 0}</strong>
+        </div>
+        <div>
+          <small>{t("Erfasste Tage")}</small>
+          <strong>{data.health.days.length}</strong>
+        </div>
+        <button onClick={() => setPage("agent")}>
+          {t("KI-Agent öffnen")}
+          <ArrowUpRight size={18} />
+        </button>
+        <button onClick={() => setPage("obsidian")}>
+          Obsidian
+          <ArrowUpRight size={18} />
+        </button>
+        <p>{t("Aktueller App-Bestand. Keine Beispieldaten.")}</p>
+      </div>
       <main>
         <header>
           <div className="header-location">
@@ -539,215 +585,27 @@ export default function Home() {
             </div>
           )}
           {page === "dashboard" && (
-            <>
-              <section className="hero">
-                <div>
-                  <span className="pill">
-                    <span className="statusdot" /> {slogan}
-                  </span>
-                  <h2>
-                    {t("Weniger Tabs.")}
-                    <br />
-                    <span>{t("Mehr Überblick.")}</span>
-                  </h2>
-                  <p>
-                    {t("Deine Aufgaben, Musik und Gesundheit.")}
-                    <br />
-                    {t("Ein ruhiger Ort für alles, was dich bewegt.")}
-                  </p>
-                  <button onClick={() => setPage("tasks")}>
-                    {t("Meinen Tag planen")}
-                    <ArrowUpRight size={16} />
-                  </button>
-                </div>
-                <div className="orbit">
-                  <div className="orbitline one" />
-                  <div className="orbitline two" />
-                  <div className="orbitcenter">
-                    <Layers3 size={42} />
-                  </div>
-                  <span className="orbitnode n1">
-                    <HeartPulse />
-                  </span>
-                  <span className="orbitnode n2">
-                    <CheckSquare />
-                  </span>
-                  <span className="orbitnode n3">
-                    <Music />
-                  </span>
-                  <span className="orbitnode n4">
-                    <Bot />
-                  </span>
-                </div>
-              </section>
-              <StepChart days={data.health.days} language={language} />
-              <div className="sectionlabel">
-                {t("Heute auf einen Blick")}{" "}
-                <span>{t("DEIN TÄGLICHER PULS")}</span>
-              </div>
-              <section className="stats">
-                {[
-                  [
-                    Footprints,
-                    t("Schritte"),
-                    fmt(today?.steps),
-                    t("Heute"),
-                    "mint",
-                  ],
-                  [
-                    Moon,
-                    t("Schlaf"),
-                    today?.sleep_minutes == null
-                      ? "—"
-                      : fmt(today.sleep_minutes / 60) + " h",
-                    t("Letzte Nacht"),
-                    "purple",
-                  ],
-                  [
-                    Activity,
-                    t("Ruhepuls"),
-                    fmt(today?.resting_pulse),
-                    t("bpm · Tagesmittel"),
-                    "peach",
-                  ],
-                  [
-                    Weight,
-                    t("Gewicht"),
-                    fmt(
-                      data.health.days.find((d) => d.weight_kg != null)
-                        ?.weight_kg,
-                    ),
-                    t("kg · letzter Tageswert"),
-                    "blue",
-                  ],
-                ].map(([Icon, label, value, sub, color]) => {
-                  const I = Icon as typeof Footprints;
-                  return (
-                    <button
-                      className="stat card"
-                      key={String(label)}
-                      onClick={() => setPage("health")}
-                    >
-                      <div className={"staticon " + color}>
-                        <I size={20} />
-                      </div>
-                      <span>{String(label)}</span>
-                      <strong>{String(value)}</strong>
-                      <small>{String(sub)}</small>
-                    </button>
-                  );
-                })}
-              </section>
-              <section className="twocol">
-                <div className="card panel">
-                  <div className="paneltitle">
-                    <h3>
-                      <CheckSquare size={18} /> {t("Meine Aufgaben")}{" "}
-                      <span className="count">
-                        {data.tasks.filter((t) => !t.completed).length}
-                      </span>
-                    </h3>
-                    <button onClick={() => setPage("tasks")}>
-                      {t("Alle ansehen")}
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </div>
-                  {data.tasks.length ? (
-                    data.tasks.slice(0, 4).map(taskRow)
-                  ) : (
-                    <div className="empty">
-                      <CheckSquare />
-                      <p>{t("Ein klarer Kopf beginnt mit einer Liste.")}</p>
-                      <button
-                        disabled={!enabled}
-                        onClick={() => setEditor({ kind: "tasks" })}
-                      >
-                        {t("Erste Aufgabe anlegen")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="card panel signal-panel">
-                  <span className="eyebrow">
-                    MAINFRAME // CONNECTED WORKSPACE
-                  </span>
-                  <h3>{t("Dein nächster Impuls")}</h3>
-                  <p>
-                    {t(
-                      "Entwickle deinen nächsten Release, frage deinen Agenten oder öffne deinen Vault.",
-                    )}
-                  </p>
-                  <div className="module-shortcuts">
-                    {[
-                      ["music", "♫", t("Musik")],
-                      ["agent", ">_", t("KI-Agent")],
-                      ["obsidian", "◇", "Obsidian"],
-                    ].map(([id, icon, label]) => (
-                      <button key={id} onClick={() => setPage(id)}>
-                        <strong>{icon}</strong>
-                        {label}
-                        <ArrowUpRight size={16} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </section>
-              <div className="sectionlabel">
-                {t("Dein vernetztes Leben")}
-                <span>{t("WÄCHST MIT DIR")}</span>
-              </div>
-              <section className="integrations">
-                {[
-                  ["€", t("Finanzen"), t("Budget & Ausgaben")],
-                  ["⌂", "Smart Home", t("Dein Zuhause im Blick")],
-                  ["♫", t("Musik"), t("Releases & Projekte")],
-                ].map(([icon, title, sub]) => (
-                  <div className="card integration" key={title}>
-                    <span className="integrationicon">{icon}</span>
-                    <h3>{title}</h3>
-                    <p>{sub}</p>
-                    <span className="tag">{t("Nicht verbunden")}</span>
-                  </div>
-                ))}
-              </section>
-            </>
+            <DashboardLayouts
+              layout={layout}
+              language={language}
+              tasks={data.tasks}
+              projects={data.music || []}
+              days={data.health.days}
+              taskRows={data.tasks
+                .slice(0, layout === "control" ? 6 : 4)
+                .map(taskRow)}
+              enabled={enabled}
+              navigate={setPage}
+              newTask={() => setEditor({ kind: "tasks" })}
+            />
           )}
-          {(page === "tasks" || page === "notes" || page === "events") && (
-            <section className="card panel">
-              <div className="paneltitle">
-                <h3>{navigation.find((n) => n[0] === page)?.[1]}</h3>
-                <span className="tag">
-                  {data[page as Kind].length}
-                  {t("Einträge")}
-                </span>
-              </div>
-              {data[page as Kind].length ? (
-                data[page as Kind].map((i) =>
-                  page === "tasks" ? (
-                    taskRow(i)
-                  ) : (
-                    <button
-                      className="listitem"
-                      key={i.id}
-                      onClick={() => setEditor({ kind: page as Kind, item: i })}
-                    >
-                      <strong>{i.title}</strong>
-                      <p>
-                        {page === "events"
-                          ? dateText(i.start!) + " · " + i.location
-                          : i.description || t("Keine Beschreibung")}
-                      </p>
-                    </button>
-                  ),
-                )
-              ) : (
-                <div className="empty">
-                  <Bot />
-                  <p>{t("Noch keine Einträge.")}</p>
-                  <span>{t("Lege oben deinen ersten Eintrag an.")}</span>
-                </div>
-              )}
-            </section>
+          {page === "tasks" && (
+            <TaskWorkspace
+              layout={layout}
+              language={language}
+              tasks={data.tasks}
+              row={taskRow}
+            />
           )}
           {page === "health" && (
             <section className="card panel">
@@ -820,6 +678,77 @@ export default function Home() {
           {page === "settings" && (
             <section className="card panel settings">
               <h3>{t("Darstellung")}</h3>
+              <div className="appearance-heading">
+                <span>01 / {t("Layout")}</span>
+                <p>
+                  {t("Vier Arbeitsweisen. Jede mit jeder Farbe kombinierbar.")}
+                </p>
+              </div>
+              <div
+                className="layout-picker"
+                role="group"
+                aria-label={t("Layout wählen")}
+              >
+                {layouts.map((option) => (
+                  <button
+                    key={option.id}
+                    className={
+                      "layout-option" +
+                      (layout === option.id ? " selected" : "")
+                    }
+                    aria-pressed={layout === option.id}
+                    onClick={() => setLayout(option.id)}
+                  >
+                    <div
+                      className={"layout-mini mini-" + option.id}
+                      aria-hidden="true"
+                    >
+                      <i />
+                      <i />
+                      <i />
+                      <i />
+                      <i />
+                    </div>
+                    <span>
+                      <b>{option.number}</b>
+                      <strong>{option.name}</strong>
+                      {layout === option.id && (
+                        <span className="layout-check">↗</span>
+                      )}
+                    </span>
+                    <p>{t(option.description)}</p>
+                  </button>
+                ))}
+              </div>
+              <div className="appearance-heading">
+                <span>02 / {t("Farbwelt")}</span>
+                <p>{t("Die Farbe verändert nicht das Layout.")}</p>
+              </div>
+              <div
+                className="palette-picker"
+                role="group"
+                aria-label={t("Farbwelt wählen")}
+              >
+                {[
+                  ["dark", "Violet", "#b69af7", "#11101d"],
+                  ["light", "Paper", "#6940a6", "#f7f6fb"],
+                  ["amber", "Amber", "#ffc14a", "#100e09"],
+                  ["cyan", "Cyan", "#52e5ee", "#06151d"],
+                ].map(([id, name, accent, bg]) => (
+                  <button
+                    key={id}
+                    aria-pressed={theme === id}
+                    className={theme === id ? "selected" : ""}
+                    onClick={() => setTheme(id as Theme)}
+                  >
+                    <span style={{ background: bg, borderColor: accent }}>
+                      <i style={{ background: accent }} />
+                    </span>
+                    {name}
+                  </button>
+                ))}
+              </div>
+
               <div className="preference-fields">
                 <label>
                   {t("Sprache")}
@@ -841,10 +770,10 @@ export default function Home() {
                     value={theme}
                     onChange={(event) => setTheme(event.target.value as Theme)}
                   >
-                    <option value="dark">Violet Mainframe</option>
-                    <option value="light">Paper Studio</option>
-                    <option value="amber">Amber Terminal</option>
-                    <option value="cyan">Cyan Grid</option>
+                    <option value="dark">Violet</option>
+                    <option value="light">Paper</option>
+                    <option value="amber">Amber</option>
+                    <option value="cyan">Cyan</option>
                   </select>
                 </label>
               </div>
