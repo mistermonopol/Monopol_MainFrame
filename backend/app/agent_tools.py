@@ -1,5 +1,5 @@
 """Allowlisted app operations. No shell, credentials, arbitrary URLs or file roots."""
-from uuid import uuid4
+from uuid import uuid4, uuid5, NAMESPACE_URL
 from datetime import timedelta
 from fastapi import HTTPException
 from sqlalchemy import select, delete
@@ -29,6 +29,12 @@ def tools():
             'path':{'type':'string'},'content':{'type':'string','maxLength':200000},'version':{'type':'string','description':'Current SHA-256 version, or empty string for a new file.'}
         },['path','content','version']),
         function('read_vault_graph','Read actual wiki/Markdown links between brain notes.',{},[]),
+        function('list_lights','Read actual Home Assistant light names, entity IDs, supported functions, states and bridge availability. Always call this before choosing targets. Names may be ambiguous.',{},[]),
+        function('control_lights','Control only explicit known Home Assistant light IDs requested by the user. Ask if a name is ambiguous. Use supported functions only. Zero brightness means off. An accepted command is not proof that a physical lamp changed; inspect returned states and explain uncertain results.',{
+            'entity_ids':{'type':'array','items':{'type':'string'},'minItems':1,'maxItems':100},
+            'power':{'type':'string','enum':['on','off']},'brightness_pct':{'type':'integer','minimum':0,'maximum':100},
+            'rgb_color':{'type':'array','items':{'type':'integer','minimum':0,'maximum':255},'minItems':3,'maxItems':3},
+            'color_temp_kelvin':{'type':'integer','minimum':1,'maximum':100000}},['entity_ids']),
     ]
 
 
@@ -96,3 +102,21 @@ def cleanup_history():
     with Session.begin() as db:
         db.execute(delete(Item).where(Item.kind == 'agent_turn', Item.updated_at < now() - timedelta(days=1)))
         db.execute(delete(Item).where(Item.kind == 'agent_revision', Item.updated_at < now() - timedelta(days=30)))
+        db.execute(delete(Item).where(Item.kind == 'ha_command', Item.updated_at < now() - timedelta(days=7)))
+
+
+async def dispatch(name, args, scope):
+    if name == 'list_lights':
+        from .home_assistant import lights
+        return lights(), None
+    if name == 'control_lights':
+        from .home_assistant import CommandInput, control
+        if not isinstance(args,dict) or 'request_id' in args:
+            raise ValueError('Invalid light arguments')
+        result = await control(CommandInput.model_validate({**args,'request_id':uuid5(NAMESPACE_URL,scope)}))
+        if result['command']['status']=='accepted':
+            ids = result['command']['command']['entity_ids']
+            names = [lamp['name'] for lamp in result['home_assistant']['lights'] if lamp['entity_id'] in ids]
+            return result, {'type':'control_lights','kind':'lights','id':result['command']['id'],'title':', '.join(names[:4]) + (f' +{len(names)-4}' if len(names)>4 else '')}
+        return result, None
+    return execute(name,args)

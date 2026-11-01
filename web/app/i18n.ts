@@ -22,6 +22,7 @@ export function actionLabel(
 ) {
   const t = translator(language);
   const updated = action.type.startsWith("update");
+  if (action.type === "control_lights") return t("Lichtbefehl angenommen");
   if (action.type.endsWith("note"))
     return t(updated ? "Notiz aktualisiert" : "Notiz erstellt");
   if (action.kind === "tasks")

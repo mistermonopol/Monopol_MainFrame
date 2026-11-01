@@ -33,6 +33,7 @@ export default function DashboardLayouts({
   layout,
   language,
   tasks,
+  homeStatus,
   projects,
   days,
   taskRows,
@@ -40,6 +41,7 @@ export default function DashboardLayouts({
   navigate,
   newTask,
 }: {
+  homeStatus?: string;
   layout: LayoutName;
   language: Language;
   tasks: Task[];
@@ -174,7 +176,7 @@ export default function DashboardLayouts({
     <section className="connection-ledger" aria-label={t("Verbindungen")}>
       {[
         ["Finanzen", false],
-        ["Smart Home", false],
+        ["Smart Home", homeStatus === "online"],
         ["Health Connect", days.length > 0],
       ].map(([name, connected]) => (
         <div key={String(name)}>

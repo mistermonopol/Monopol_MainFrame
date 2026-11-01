@@ -7,6 +7,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Coolify Compose
         run: docker compose -f compose.coolify.yaml --env-file .env.example config --quiet
+      - name: Validate and build the outbound home bridge
+        run: |
+          docker compose -f compose.bridge.yaml --env-file .env.bridge.example config --quiet
+          docker build -f bridge/Dockerfile -t mainframe-home-bridge:ci .
       - name: Build and start the complete deployment
         run: docker compose -f compose.coolify.yaml --env-file .env.example up --build -d --wait --wait-timeout 180
       - name: Check Web to API to PostgreSQL

@@ -1,14 +1,16 @@
 # Deployment auf monopol-ai.de mit Coolify
 
-## Musik, KI-Agent und Obsidian (Version 0.7)
+## Musik, KI-Agent und Obsidian (Version 0.8)
 
 Unter Einstellungen lassen sich die vier **Layouts Index, Studio, Control und Focus** jeweils mit **Violet, Paper, Amber und Cyan** kombinieren. Sprache, Layout und Palette werden pro Gerät gespeichert. Alle 16 Kombinationen verwenden dieselben Daten. Die Layouts verändern Navigation, Inhaltsaufteilung sowie Aufgaben-, Musik-, Agenten- und Vault-Ansichten. Näheres und Designreferenzen: [layouts.md](layouts.md).
 
-Der Musik-Tab bettet **https://vault.monopol-ai.de/spotify** ein; dafür sind keine neuen Coolify-Variablen erforderlich. Eigene Musikprojekte mit Beschreibung, Release-Datum, Link/Dateipfad und Status bleiben darunter verfügbar. Die externe Seite braucht gegebenenfalls eine eigene Anmeldung. Ein direkter Link ist vorhanden, falls Browser oder Dienst die Einbettung blockieren. Persönliche Anmeldung im externen Dienst wurde nicht getestet. Für den aktuellen Stand auf `main` redeployen; Android-Version 0.7.0 separat installieren.
+Der Musik-Tab bettet **https://vault.monopol-ai.de/spotify** ein; dafür sind keine neuen Coolify-Variablen erforderlich. Eigene Musikprojekte mit Beschreibung, Release-Datum, Link/Dateipfad und Status bleiben darunter verfügbar. Die externe Seite braucht gegebenenfalls eine eigene Anmeldung. Ein direkter Link ist vorhanden, falls Browser oder Dienst die Einbettung blockieren. Persönliche Anmeldung im externen Dienst wurde nicht getestet. Für den aktuellen Stand auf `main` redeployen; Android-Version 0.8.0 separat installieren.
 
 Kalender und alte Notizen bleiben aus der Navigation entfernt; ihre Daten bleiben erhalten und im Agentenkontext enthalten. Eine Spotify-Daten-API wird durch das Einbetten nicht eingerichtet.
 
 **Neu in 0.7:** `mono_frame_brain` als Wissens-Vault mit Graph und Schreibwerkzeugen, außerdem Aufgaben-Erinnerungen über Browser-Push und Android. Einrichtung, Grenzen und Gerätetest: [brain-reminders.md](brain-reminders.md). Benachrichtigungen in den Settings pro Gerät freigeben. Das bestehende Obsidian-Volume bleibt erhalten; fehlende Startnotizen werden angelegt.
+
+**Neu in 0.8:** Smart-Home-Tab und Agenten-Lampensteuerung. Die lokale Docker-Bridge aus `compose.bridge.yaml` gehört auf den Heimnetz-Rechner, nicht auf diesen externen Coolify-Server. Keine neuen Cloud-Umgebungsvariablen erforderlich. Anleitung: [home-assistant.md](home-assistant.md).
 
 ### Agent aktivieren
 

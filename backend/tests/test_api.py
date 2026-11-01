@@ -9,6 +9,7 @@ os.environ["HEALTH_DATABASE_URL"] = os.getenv("TEST_HEALTH_DATABASE_URL", "sqlit
 os.environ["ADMIN_PASSWORD"] = "test-only-password-with-sufficient-entropy"
 os.environ["PUBLIC_URL"] = "https://life.test"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import hashlib
 import time

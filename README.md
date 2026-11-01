@@ -6,7 +6,7 @@ Die Oberfläche startet auf Englisch. Unter **Settings → Appearance** lassen s
 
 Im Musik-Tab ist **https://vault.monopol-ai.de/spotify** direkt eingebettet, mit Neuladen, größerer Ansicht und externem Link. Android nutzt dafür eine HTTPS-WebView. Der externe Dienst verwaltet seine eigene Anmeldung und Darstellung; MainFrame gibt keine eigenen Zugangsdaten weiter.
 
-Der Agent verwendet eine serverseitig konfigurierte Chat-Completions-API mit Tool Calling (`AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`). Er liest aktuelle App-Daten einschließlich Gesundheitswerten und kann Markdown-Notizen aus dem verbundenen Vault nachladen. Er kann auf deine Aufforderung Aufgaben, Musikprojekte, bisherige Notizen/Termine sowie Vault-Notizen anlegen und ändern. Erfolgreiche Aktionen werden angezeigt und Änderungen mit früherem Stand protokolliert. Gesundheitswerte bleiben schreibgeschützt. Beim Senden gehen diese Daten an den gewählten KI-Anbieter. Der Obsidian-Tab kann Notizen direkt erstellen und bearbeiten; der Vault liegt als Ordner/Volume auf dem Server. PC-Synchronisierung, API-Anbindung und Backups sind in [docs/coolify.md](docs/coolify.md) beschrieben. Finanzen und Smart Home bleiben unverbunden.
+Der Agent verwendet eine serverseitig konfigurierte Chat-Completions-API mit Tool Calling (`AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`). Er liest aktuelle App-Daten einschließlich Gesundheitswerten und kann Markdown-Notizen aus dem verbundenen Vault nachladen. Er kann auf deine Aufforderung Aufgaben, Musikprojekte, bisherige Notizen/Termine sowie Vault-Notizen anlegen und ändern. Erfolgreiche Aktionen werden angezeigt und Änderungen mit früherem Stand protokolliert. Gesundheitswerte bleiben schreibgeschützt. Beim Senden gehen diese Daten an den gewählten KI-Anbieter. Der Obsidian-Tab kann Notizen direkt erstellen und bearbeiten; der Vault liegt als Ordner/Volume auf dem Server. PC-Synchronisierung, API-Anbindung und Backups sind in [docs/coolify.md](docs/coolify.md) beschrieben. Finanzen bleiben unverbunden. Home Assistant wird über eine lokale Docker-Bridge angebunden.
 
 Der persistente Obsidian-Vault **mono_frame_brain** unterstützt den Agenten als Wissensarchiv. `AI_Brain.md` und eine vorhandene `Memory.md` werden als Kontext gelesen; weitere Notizen kann der Agent gezielt nachladen. Der Obsidian-Tab zeigt einen Graphen aus Wiki- und Markdown-Links mit Suche, Auswahl und Zoom. Bestehende Dateien werden bei der Initialisierung nicht überschrieben.
 
@@ -17,6 +17,10 @@ Die Übersicht enthält ein Schrittediagramm: **Daily** zeigt 14 Tageswerte, **W
 UI-Übersetzungen liegen in `web/app/messages.json`. Nach Änderungen mit `node ops/generate-locales.mjs` die native Übersetzungstabelle neu erzeugen. Eigene Aufgaben, Notizen und Termine werden bei einem Sprachwechsel nicht übersetzt oder verändert. API-Fehler verwenden standardmäßig Englisch und berücksichtigen `Accept-Language: de`.
 
 **Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://monopol-ai.de`, Umgebungsvariablen und Passwort-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
+
+## Lokaler Home Assistant
+
+Der Tab **Smart Home** und der Agent können Lampen an-/ausschalten, dimmen und unterstützte Farben/Farbtemperaturen setzen. Bei externem Coolify läuft `compose.bridge.yaml` auf einem Docker-Rechner **im Heimnetz**. Die Bridge verbindet sich ausgehend per HTTPS; Home Assistant bleibt lokal. Alle `light.*`-Entitäten werden übernommen. Einrichtung mit zwei getrennten Tokens: [docs/home-assistant.md](docs/home-assistant.md).
 
 ## Docker Compose ohne Coolify
 
@@ -95,4 +99,4 @@ Den lokalen Prüfstand und verbleibende Gerätetests beschreibt [docs/verificati
 
 ## Noch außerhalb dieses Meilensteins
 
-Google Calendar/Tasks, Banken, Home Assistant, Musikdienste, KI, n8n, Push und Sprache sind noch nicht angebunden. Keine medizinischen Auswertungen, keine Überweisungen und keine öffentliche Mehrbenutzerplattform.
+Google Calendar/Tasks, Banken, Künstler-Daten-APIs, n8n und Sprache sind noch nicht angebunden. KI, Aufgaben-Benachrichtigungen, Obsidian und die Home-Assistant-Lampensteuerung sind vorhanden; persönliche Anbindungen benötigen die beschriebene Einrichtung. Keine medizinischen Auswertungen, keine Überweisungen und keine öffentliche Mehrbenutzerplattform.

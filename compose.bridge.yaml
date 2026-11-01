@@ -1,0 +1,22 @@
+# Run this on a machine in your HOME network, not on the external Coolify server.
+name: mainframe-home-bridge
+services:
+  home-bridge:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile
+    environment:
+      MAINFRAME_URL: ${MAINFRAME_URL:?Set your MainFrame HTTPS origin}
+      HA_URL: ${HA_URL:?Set the reachable local Home Assistant origin}
+      MAINFRAME_BRIDGE_TOKEN_FILE: /run/secrets/mainframe_bridge_token
+      HA_TOKEN_FILE: /run/secrets/ha_token
+    secrets: [mainframe_bridge_token, ha_token]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+secrets:
+  mainframe_bridge_token:
+    file: ${MAINFRAME_BRIDGE_TOKEN_PATH:-./secrets/mainframe_bridge_token}
+  ha_token:
+    file: ${HA_TOKEN_PATH:-./secrets/ha_token}

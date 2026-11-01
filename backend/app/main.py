@@ -298,8 +298,11 @@ def clear_health():
 
 @app.get("/api/v1/dashboard", dependencies=[Depends(authenticated)])
 def dashboard():
+    from .home_assistant import lights
+    home = lights()
     return {"tasks": list_items("tasks"), "notes": list_items("notes"),
-            "events": list_items("events"), "music": list_items("music"), "health": health_days()}
+            "events": list_items("events"), "music": list_items("music"), "health": health_days(),
+            "smart_home": {"status":home['status'],"light_count":len(home['lights'])}}
 
 
 # Authentication and CSRF checks apply to every integration route.
@@ -307,3 +310,6 @@ from .integrations import router as integrations_router
 app.include_router(integrations_router, prefix="/api/v1", dependencies=[Depends(authenticated)])
 from .reminders import router as reminders_router
 app.include_router(reminders_router, prefix="/api/v1", dependencies=[Depends(authenticated)])
+from .home_assistant import user_router as home_router, bridge_router
+app.include_router(home_router, dependencies=[Depends(authenticated)])
+app.include_router(bridge_router)

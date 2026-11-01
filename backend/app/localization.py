@@ -30,4 +30,14 @@ MESSAGES.update({
     "Zeitüberschreitung beim KI-Anbieter. Erneut versuchen oder ein schnelleres Modell verwenden.": "AI provider timed out. Please retry or use a faster model.",
     "KI-Anbieter nicht erreichbar. DNS, Internetverbindung des Servers und AI_BASE_URL prüfen.": "Cannot reach the AI provider. Check the server's DNS, internet connection and AI_BASE_URL.",
 })
+MESSAGES.update({
+    'Die Home-Assistant-Bridge ist offline. Es wurde kein Befehl vorgemerkt.':'Home Assistant bridge is offline. No command was queued.',
+    'Eine ausgewählte Lampe ist unbekannt oder nicht verfügbar.':'A selected light is unknown or unavailable.',
+    'Eine ausgewählte Lampe unterstützt kein Dimmen.':'A selected light does not support dimming.',
+    'Eine ausgewählte Lampe unterstützt keine Lichtfarbe.':'A selected light does not support color.',
+    'Eine ausgewählte Lampe unterstützt keine Farbtemperatur.':'A selected light does not support color temperature.',
+    'Die Farbtemperatur liegt außerhalb des unterstützten Bereichs.':'Color temperature is outside the supported range.',
+    'Diese Anfrage-ID wurde bereits für einen anderen Lichtbefehl verwendet.':'Request ID already used for another light command.',
+    'Lichtbefehl nicht gefunden.':'Light command not found.',
+})
 GERMAN_MESSAGES = {en: de for de, en in MESSAGES.items()}

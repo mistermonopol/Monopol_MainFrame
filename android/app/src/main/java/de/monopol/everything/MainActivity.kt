@@ -200,6 +200,7 @@ class MainActivity : ComponentActivity() {
             "Musik" to Icons.Outlined.MusicNote,
             "KI-Agent" to Icons.Outlined.SmartToy,
             "Obsidian" to Icons.Outlined.Description,
+            "Smart Home" to Icons.Outlined.Lightbulb,
             "Gesundheit" to Icons.Outlined.MonitorHeart,
             "Einstellungen" to Icons.Outlined.Settings
         )
@@ -215,6 +216,7 @@ class MainActivity : ComponentActivity() {
                 SquareIconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronRight, t(toggleLabel)) }
                 Spacer(Modifier.height(20.dp))
             }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             items.forEachIndexed { index, (label, icon) ->
                 if (expanded) NavigationDrawerItem(
                     label = { Text(t(label)) }, selected = screen == label, onClick = { onSelect(label) },
@@ -230,7 +232,7 @@ class MainActivity : ComponentActivity() {
                     if (screen == label) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(0.dp)
                 )) { Icon(icon, t(label), tint = if (screen == label) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
             }
-            Spacer(Modifier.weight(1f))
+            }
             if (expanded) Text("Monopol_MainFrame your App for Everything", Modifier.padding(12.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -282,6 +284,7 @@ class MainActivity : ComponentActivity() {
                     (data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()).objects().forEach { day -> Text(day.optString("day")); HealthCard(day) }
                 }
                 if(screen=="KI-Agent" || screen=="Obsidian") ConnectedModule(screen,api,connected,language){refresh()}
+                if(screen=="Smart Home")SmartHomeScreen(api,connected,language,lifecycle,{screen="Einstellungen"}){refresh()}
                 if (screen == "Einstellungen") SettingsContent()
             }
         }
@@ -411,6 +414,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun SettingsContent() {
+        HomeBridgeSettings(api,connected,language)
         var notifications by remember{mutableStateOf(store.get("taskNotifications")=="true")}
         val notificationPermission=rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()){granted->notifications=granted;store.put("taskNotifications",granted.toString());if(granted)TaskNotifications.schedule(this) else TaskNotifications.stop(this)}
         Text(t("Aufgaben-Erinnerungen"),style=MaterialTheme.typography.titleMedium)

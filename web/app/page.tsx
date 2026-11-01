@@ -4,9 +4,11 @@ import { Language, Theme, localeFor, translator, slogan } from "./i18n";
 import DashboardLayouts from "./DashboardLayouts";
 import TaskWorkspace from "./TaskWorkspace";
 import NotificationSettings from "./NotificationSettings";
+import SmartHome, { BridgeSettings } from "./SmartHome";
 import { LayoutName, layouts, validLayout } from "./appearance";
 import WorkspaceModules from "./WorkspaceModules";
 import {
+  Lightbulb,
   Music,
   Bot,
   Gem,
@@ -50,6 +52,7 @@ type Day = {
 };
 type Data = {
   tasks: Item[];
+  smart_home?: { status: string; light_count: number };
   music?: Item[];
   notes: Item[];
   events: Item[];
@@ -75,6 +78,7 @@ export default function Home() {
     ["music", t("Musik"), Music],
     ["agent", t("KI-Agent"), Bot],
     ["obsidian", "Obsidian", Gem],
+    ["home", "Smart Home", Lightbulb],
     ["health", t("Gesundheit"), HeartPulse],
     ["settings", t("Einstellungen"), Settings],
   ] as const;
@@ -596,6 +600,7 @@ export default function Home() {
               layout={layout}
               language={language}
               tasks={data.tasks}
+              homeStatus={data.smart_home?.status}
               projects={data.music || []}
               days={data.health.days}
               taskRows={data.tasks
@@ -683,8 +688,22 @@ export default function Home() {
               onChanged={() => void load()}
             />
           )}
+          {page === "home" && (
+            <SmartHome
+              language={language}
+              enabled={enabled}
+              request={request}
+              settings={() => setPage("settings")}
+              onChanged={() => void load()}
+            />
+          )}
           {page === "settings" && (
             <section className="card panel settings">
+              <BridgeSettings
+                language={language}
+                enabled={enabled}
+                request={request}
+              />
               <NotificationSettings
                 language={language}
                 enabled={enabled}
