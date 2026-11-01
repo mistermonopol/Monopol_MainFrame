@@ -1,0 +1,11 @@
+[Unit]
+Description=Everything encrypted database backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/everything
+EnvironmentFile=/etc/everything-backup.env
+ExecStart=/bin/sh /opt/everything/ops/backup.sh
+UMask=0077

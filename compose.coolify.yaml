@@ -1,0 +1,69 @@
+# Coolify: Git repository > Docker Compose; base directory /.
+# Configure secrets under Environment Variables, not in a repository .env file.
+services:
+  db:
+    build:
+      context: .
+      dockerfile: ops/postgres.Dockerfile
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD}
+      HEALTH_DB_PASSWORD: ${HEALTH_DB_PASSWORD:?Set HEALTH_DB_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    labels:
+      de.monopol.everything.backup: ${BACKUP_STACK_ID:-everything}
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U postgres -d life"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://life_app:${APP_DB_PASSWORD}@db/life
+      HEALTH_DATABASE_URL: postgresql+psycopg://life_health:${HEALTH_DB_PASSWORD}@db/life
+      PUBLIC_URL: ${PUBLIC_URL:?Set the external HTTPS URL without a trailing slash}
+      ALLOWED_EMAIL: ${ALLOWED_EMAIL:?Set your Google account email}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET:?Set a random secret of at least 32 characters}
+      COOKIE_SECURE: "true"
+    # Run schema initialization before accepting traffic. No one-shot service
+    # that Coolify could incorrectly report as exited/unhealthy is needed.
+    command:
+      - sh
+      - -c
+      - python -m app.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    expose: ["3000"]
+    # Private Tailscale ingress. Coolify's proxy can also reach port 3000
+    # through the stack network if you deliberately configure a public domain.
+    ports:
+      - "127.0.0.1:${PRIVATE_WEB_PORT:-3080}:3000"
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  postgres:
