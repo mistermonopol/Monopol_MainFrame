@@ -1,7 +1,7 @@
 import "./globals.css";
 export const metadata = {
-  title: "Everything · Dein Life OS",
-  description: "Dein Tag. Dein Leben. Ein Ort.",
+  title: "Monopol_MainFrame",
+  description: "Dein persönlicher Workspace für Alltag und Projekte.",
 };
 export default function Layout({
   children,

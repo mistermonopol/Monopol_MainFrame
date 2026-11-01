@@ -127,6 +127,7 @@ test("offline cache stays readable and writes are disabled", async ({
 
 test("missing health values and disconnected services are explicit", async ({
   page,
+  isMobile,
 }) => {
   await page.route("**/api/v1/dashboard", (r) =>
     r.fulfill({
@@ -143,6 +144,88 @@ test("missing health values and disconnected services are explicit", async ({
     3,
   );
   await expect(page.locator(".stat strong").first()).toHaveText("—");
+  if (isMobile)
+    await page
+      .getByRole("button", { name: "Navigation öffnen", exact: true })
+      .click();
   await page.getByRole("button", { name: "Gesundheit", exact: true }).click();
   await expect(page.getByText("Noch keine Gesundheitsdaten.")).toBeVisible();
+});
+
+test("left navigation collapses on desktop and opens as a keyboard accessible mobile drawer", async ({
+  page,
+  isMobile,
+}) => {
+  await page.route("**/api/v1/dashboard", (route) =>
+    route.fulfill({
+      json: {
+        tasks: [],
+        notes: [],
+        events: [],
+        health: { days: [], last_sync: null },
+      },
+    }),
+  );
+  await page.goto("/");
+  await expect(page).toHaveTitle("Monopol_MainFrame");
+  const sidebar = page.locator("#sidebar");
+  if (isMobile) {
+    const trigger = page.getByRole("button", {
+      name: "Navigation öffnen",
+      exact: true,
+    });
+    await expect(sidebar).toBeHidden();
+    await trigger.click();
+    await expect(
+      page.getByRole("dialog", { name: "Seitennavigation" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Navigation schließen", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(sidebar).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page
+      .getByRole("button", { name: "Einstellungen", exact: true })
+      .click();
+    await expect(sidebar).toBeHidden();
+  } else {
+    await page
+      .getByRole("button", { name: "Seitenleiste einklappen", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Seitenleiste ausklappen",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-expanded", "false");
+    await page.reload();
+    await expect(
+      page.getByRole("button", {
+        name: "Seitenleiste ausklappen",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Einstellungen", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Seitenleiste ausklappen", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Seitenleiste einklappen",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+  }
+  await expect(
+    page.getByRole("heading", { name: "Einstellungen", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });

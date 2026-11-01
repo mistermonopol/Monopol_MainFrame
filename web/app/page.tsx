@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   CheckSquare,
@@ -20,6 +20,10 @@ import {
   Weight,
   X,
   Trash2,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SquareTerminal,
 } from "lucide-react";
 
 type Item = {
@@ -87,6 +91,73 @@ export default function Home() {
     [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(
+        localStorage.getItem("monopol-sidebar-collapsed") === "true",
+      );
+    } catch {}
+    const desktop = window.matchMedia("(min-width: 801px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileMenuOpen(false);
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const sidebar = sidebarRef.current;
+    const focusClose = () =>
+      sidebar
+        ?.querySelector<HTMLButtonElement>(".mobile-nav-close")
+        ?.focus({ preventScroll: true });
+    const afterTransition = (event: TransitionEvent) => {
+      if (event.target === sidebar && event.propertyName === "transform")
+        focusClose();
+    };
+    sidebar?.addEventListener("transitionend", afterTransition);
+    const focusFrame = window.requestAnimationFrame(focusClose);
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+      if (event.key !== "Tab") return;
+      const controls = Array.from(
+        sidebarRef.current?.querySelectorAll<HTMLElement>(
+          "a[href], button:not([disabled])",
+        ) || [],
+      ).filter((element) => element.getClientRects().length > 0);
+      const first = controls[0],
+        last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      }
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      sidebar?.removeEventListener("transitionend", afterTransition);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKey);
+      menuButtonRef.current?.focus();
+    };
+  }, [mobileMenuOpen]);
+  function toggleSidebar() {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem("monopol-sidebar-collapsed", String(next));
+    } catch {}
+  }
   const [editor, setEditor] = useState<{ kind: Kind; item?: Item } | null>(
     null,
   );
@@ -209,24 +280,83 @@ export default function Home() {
     );
   }
   return (
-    <div className="shell">
-      <aside>
-        <a className="brand" href="/">
-          <span className="brandicon">
-            <Layers3 size={23} />
-          </span>
-          everything<span className="branddot">.</span>
-        </a>
+    <div
+      className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileMenuOpen ? " menu-open" : ""}`}
+    >
+      {mobileMenuOpen && (
+        <button
+          className="sidebar-scrim"
+          aria-label="Menü schließen"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      <aside
+        id="sidebar"
+        ref={sidebarRef}
+        aria-label="Seitennavigation"
+        role={mobileMenuOpen ? "dialog" : undefined}
+        aria-modal={mobileMenuOpen || undefined}
+      >
+        <div className="sidebar-head">
+          <a
+            className="brand"
+            href="/"
+            aria-label="Monopol_MainFrame Startseite"
+            title="Monopol_MainFrame"
+          >
+            <span className="brandicon">
+              <SquareTerminal size={22} />
+            </span>
+            <span className="brand-name">
+              Monopol_<span>MainFrame</span>
+            </span>
+          </a>
+          <button
+            className="sidebar-toggle"
+            aria-label={
+              sidebarCollapsed
+                ? "Seitenleiste ausklappen"
+                : "Seitenleiste einklappen"
+            }
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="sidebar"
+            onClick={toggleSidebar}
+            title={
+              sidebarCollapsed
+                ? "Seitenleiste ausklappen"
+                : "Seitenleiste einklappen"
+            }
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={18} />
+            ) : (
+              <PanelLeftClose size={18} />
+            )}
+          </button>
+          <button
+            className="mobile-nav-close"
+            aria-label="Navigation schließen"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
         <div className="workspace">PERSÖNLICHER WORKSPACE</div>
-        <nav>
+        <nav aria-label="Hauptnavigation">
           {navigation.map(([id, label, Icon]) => (
             <button
               key={id}
               className={page === id ? "active" : ""}
-              onClick={() => setPage(id)}
+              aria-label={label}
+              aria-current={page === id ? "page" : undefined}
+              title={label}
+              onClick={() => {
+                setPage(id);
+                setMobileMenuOpen(false);
+              }}
             >
               <Icon size={19} />
-              {label}
+              <span className="nav-label">{label}</span>
               {id === "tasks" && (
                 <span className="count">
                   {data.tasks.filter((t) => !t.completed).length}
@@ -244,16 +374,31 @@ export default function Home() {
           <div className="profile">
             <div className="avatar">M</div>
             <div>
-              Mein Life OS<small>Persönlicher Workspace</small>
+              <span className="profile-label">
+                Monopol<small>Persönlicher Workspace</small>
+              </span>
             </div>
           </div>
         </div>
       </aside>
       <main>
         <header>
-          <div className="breadcrumb">
-            Mein Workspace <span>/</span>{" "}
-            {navigation.find((n) => n[0] === page)?.[1]}
+          <div className="header-location">
+            <button
+              ref={menuButtonRef}
+              className="mobile-menu"
+              aria-label="Navigation öffnen"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="sidebar"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu size={21} />
+            </button>
+            <div className="breadcrumb">
+              <span className="header-brand">Monopol_MainFrame</span>
+              <span className="breadcrumb-divider">/</span>
+              <strong>{navigation.find((n) => n[0] === page)?.[1]}</strong>
+            </div>
           </div>
           <div className="headeractions">
             <span className="connection">
@@ -272,10 +417,10 @@ export default function Home() {
         <div className="content">
           <div className="pageheading">
             <div>
-              <div className="eyebrow">DEIN LEBEN, IM ÜBERBLICK</div>
+              <div className="eyebrow">DEIN PERSÖNLICHER WORKSPACE</div>
               <h1>
                 {page === "dashboard"
-                  ? "Ein guter Tag beginnt hier."
+                  ? "Willkommen im MainFrame."
                   : navigation.find((n) => n[0] === page)?.[1]}
               </h1>
               <p>
@@ -689,7 +834,8 @@ export default function Home() {
           )}
           <footer>
             <span>
-              <Layers3 size={13} /> everything · Dein persönliches Life OS
+              <SquareTerminal size={14} /> Monopol_MainFrame · Dein persönliches
+              Life OS
             </span>
             <span>Privat. Verbunden. Bei dir.</span>
           </footer>

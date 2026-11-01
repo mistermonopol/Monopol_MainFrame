@@ -15,7 +15,7 @@ from sqlalchemy import select, delete, text
 from .config import settings
 from .db import Session, HealthSession, Item, SessionToken, HealthDay, now
 
-app = FastAPI(title="Everything API", version="1.0.0")
+app = FastAPI(title="Monopol_MainFrame API", version="1.0.0")
 
 
 @app.middleware("http")
@@ -109,7 +109,7 @@ def native_login(payload: LoginInput):
 
 @app.get("/api/v1/session", dependencies=[Depends(authenticated)])
 def session_info():
-    return {"name": "Mein Life OS"}
+    return {"name": "Monopol_MainFrame"}
 
 
 @app.post("/api/v1/auth/logout")

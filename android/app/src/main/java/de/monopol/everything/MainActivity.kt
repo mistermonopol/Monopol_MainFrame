@@ -7,14 +7,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.health.connect.client.HealthConnectClient
@@ -42,7 +49,14 @@ class MainActivity : ComponentActivity() {
         data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFFB8EFD2), background = Color(0xFF101313), surface = Color(0xFF181C1C))) {
+            MaterialTheme(colorScheme = darkColorScheme(
+                primary = Color(0xFFB69AF7), onPrimary = Color(0xFF21152F),
+                primaryContainer = Color(0xFF35294A), onPrimaryContainer = Color(0xFFE2CCFF),
+                secondary = Color(0xFFC4A9E6), background = Color(0xFF11101D),
+                onBackground = Color(0xFFEEE9FB), surface = Color(0xFF1B192D),
+                onSurface = Color(0xFFEEE9FB), surfaceVariant = Color(0xFF2A243A),
+                onSurfaceVariant = Color(0xFFBEB0D2), outline = Color(0xFF50425F)
+            ), typography = programmerTypography) {
                 Surface(Modifier.fillMaxSize()) { App() }
             }
         }
@@ -94,6 +108,80 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable private fun App() {
+        val drawerState = rememberDrawerState(DrawerValue.Closed)
+        val scope = rememberCoroutineScope()
+        var expanded by remember { mutableStateOf(store.get("sidebarCollapsed") != "true") }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            if (maxWidth >= 840.dp) {
+                Row(Modifier.fillMaxSize()) {
+                    Surface(Modifier.width(if (expanded) 282.dp else 76.dp).fillMaxHeight(), color = Color(0xFF18162A)) {
+                        NavigationContent(expanded, if (expanded) "Navigation einklappen" else "Navigation ausklappen", {
+                            expanded = !expanded
+                            store.put("sidebarCollapsed", (!expanded).toString())
+                        }) { screen = it }
+                    }
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        WorkspaceContent {
+                            expanded = !expanded
+                            store.put("sidebarCollapsed", (!expanded).toString())
+                        }
+                    }
+                }
+            } else {
+                ModalNavigationDrawer(drawerState = drawerState, drawerContent = {
+                    ModalDrawerSheet(Modifier.width(300.dp), drawerContainerColor = Color(0xFF18162A)) {
+                        NavigationContent(true, "Navigation schließen", { scope.launch { drawerState.close() } }) {
+                            screen = it
+                            scope.launch { drawerState.close() }
+                        }
+                    }
+                }) { WorkspaceContent { scope.launch { drawerState.open() } } }
+            }
+        }
+    }
+
+    @Composable private fun NavigationContent(expanded: Boolean, toggleLabel: String, onToggle: () -> Unit, onSelect: (String) -> Unit) {
+        val items = listOf(
+            "Übersicht" to Icons.Outlined.Dashboard,
+            "Aufgaben" to Icons.Outlined.CheckBox,
+            "Notizen" to Icons.Outlined.Description,
+            "Kalender" to Icons.Outlined.CalendarMonth,
+            "Gesundheit" to Icons.Outlined.MonitorHeart,
+            "Einstellungen" to Icons.Outlined.Settings
+        )
+        Column(Modifier.fillMaxHeight().padding(12.dp).statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (expanded) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Code, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 8.dp))
+                    Text("Monopol_MainFrame", Modifier.weight(1f), fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronLeft, toggleLabel) }
+                }
+                Text("PERSÖNLICHER WORKSPACE", Modifier.padding(12.dp, 16.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                IconButton(onClick = onToggle) { Icon(Icons.Outlined.ChevronRight, toggleLabel) }
+                Spacer(Modifier.height(20.dp))
+            }
+            items.forEach { (label, icon) ->
+                if (expanded) NavigationDrawerItem(
+                    label = { Text(label) }, selected = screen == label, onClick = { onSelect(label) },
+                    icon = { Icon(icon, null) }, shape = RoundedCornerShape(7.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) else IconButton(onClick = { onSelect(label) }, modifier = Modifier.size(48.dp).background(
+                    if (screen == label) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(7.dp)
+                )) { Icon(icon, label, tint = if (screen == label) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Spacer(Modifier.weight(1f))
+            if (expanded) Text("Dein persönliches Life OS", Modifier.padding(12.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    @Composable private fun WorkspaceContent(onOpenNavigation: () -> Unit) {
         val healthAvailable = HealthConnectClient.getSdkStatus(this) == HealthConnectClient.SDK_AVAILABLE
         val permissions = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
             lifecycleScope.launch {
@@ -105,15 +193,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            Column(Modifier.padding(20.dp)) {
-                Text("everything.", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-                Text("Dein persönliches Life OS", style = MaterialTheme.typography.labelMedium)
-            }
-            ScrollableTabRow(selectedTabIndex = listOf("Übersicht", "Aufgaben", "Notizen", "Kalender", "Gesundheit", "Einstellungen").indexOf(screen).coerceAtLeast(0), edgePadding = 8.dp) {
-                listOf("Übersicht", "Aufgaben", "Notizen", "Kalender", "Gesundheit", "Einstellungen").forEach { title -> Tab(selected = screen == title, onClick = { screen = title }, text = { Text(title) }) }
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onOpenNavigation) { Icon(Icons.Outlined.Menu, "Navigation öffnen") }
+                Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    Text("Monopol_MainFrame", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(screen, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(if (screen == "Übersicht") "Ein guter Tag beginnt hier." else screen, style = MaterialTheme.typography.headlineSmall)
+                Text(if (screen == "Übersicht") "Willkommen im MainFrame." else screen, style = MaterialTheme.typography.headlineSmall)
                 Text(LocalDate.now(ZoneId.of("Europe/Berlin")).toString(), style = MaterialTheme.typography.labelMedium)
                 if (message.isNotEmpty()) Card { Text(message, Modifier.padding(14.dp)) }
                 Text(if (connected) "Server verbunden" else "Offline / noch nicht angemeldet", color = if (connected) MaterialTheme.colorScheme.primary else Color(0xFFE7BE7D))
@@ -258,3 +346,23 @@ class MainActivity : ComponentActivity() {
 }
 
 fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+
+private val programmerTypography = Typography().let { base ->
+    Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = FontFamily.Monospace),
+        displayMedium = base.displayMedium.copy(fontFamily = FontFamily.Monospace),
+        displaySmall = base.displaySmall.copy(fontFamily = FontFamily.Monospace),
+        headlineLarge = base.headlineLarge.copy(fontFamily = FontFamily.Monospace),
+        headlineMedium = base.headlineMedium.copy(fontFamily = FontFamily.Monospace),
+        headlineSmall = base.headlineSmall.copy(fontFamily = FontFamily.Monospace),
+        titleLarge = base.titleLarge.copy(fontFamily = FontFamily.Monospace),
+        titleMedium = base.titleMedium.copy(fontFamily = FontFamily.Monospace),
+        titleSmall = base.titleSmall.copy(fontFamily = FontFamily.Monospace),
+        bodyLarge = base.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+        bodyMedium = base.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+        bodySmall = base.bodySmall.copy(fontFamily = FontFamily.Monospace),
+        labelLarge = base.labelLarge.copy(fontFamily = FontFamily.Monospace),
+        labelMedium = base.labelMedium.copy(fontFamily = FontFamily.Monospace),
+        labelSmall = base.labelSmall.copy(fontFamily = FontFamily.Monospace)
+    )
+}

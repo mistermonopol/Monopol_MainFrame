@@ -1,6 +1,8 @@
-# Everything · dein persönliches Life OS
+# Monopol_MainFrame · dein persönliches Life OS
 
 Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Eigene Aufgaben, Notizen und einmalige Termine teilen sich einen Server. Health Connect liefert ausschließlich Tageswerte. Die übrigen Integrationen sind sichtbar als **Nicht verbunden**.
+
+Die Oberfläche verwendet einen dunklen Lila-Look und Consolas mit Monospace-Fallbacks. Die linke Navigation lässt sich auf dem Desktop einklappen und merkt sich die Einstellung. Auf kleinen Bildschirmen öffnet der Menüknopf ein seitliches Menü; Android verwendet ebenfalls einen Drawer und auf breiten Displays eine einklappbare Seitenleiste. Die Android-Schrift ist die lokale Monospace-Systemschrift.
 
 **Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://monopol-ai.de`, Umgebungsvariablen und Passwort-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
 
