@@ -88,6 +88,10 @@ test("configuration conflict preserves draft until explicit reload", async ({
   await page.getByRole("button", { name: "Edit widgets", exact: true }).click();
   await page
     .locator(".widget-health")
+    .getByRole("button", { name: "Configure element", exact: true })
+    .click();
+  await page
+    .locator(".widget-health")
     .getByLabel("Title", { exact: true })
     .fill("Unsaved");
   await page

@@ -1,5 +1,7 @@
 # Monopol_MainFrame your App for Everything
 
+**Version 0.10:** Das Zahnrad auf Home öffnet den Layout-Editor. Texte, laufende Uhren, Verknüpfungen, Abstände und App-Module lassen sich in responsiven Boxen organisieren; Begrüßung und Datum sind ebenfalls bearbeitbare Elemente. Titelzeilen, Rahmen und Hintergrund sind je Element wählbar. Bedienung und Update: [docs/home-editor.md](docs/home-editor.md).
+
 Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Aufgaben, Musikprojekte, API-gestützter KI-Chat und Obsidian-Notizen teilen sich einen Server. Der Hauptscreen besteht aus frei konfigurierbaren Widgets; Auswahl und Einstellungen werden synchronisiert, Desktop und Handy besitzen getrennte Anordnungen. Health Connect liefert Tageswerte und Messreihen für Puls, HRV, Sauerstoffsättigung, Atemfrequenz, Aktivität, Schlaf und Gewicht. Kalender und bisherige Notizen sind aus der Navigation entfernt; bestehende Daten bleiben gespeichert.
 
 **Version 0.9:** Widget-Baukasten und erweiterte Health-Berechtigungen sind in [docs/widgets-health.md](docs/widgets-health.md) beschrieben. Nach dem Server-Update Android 0.9.0 installieren und gewünschte zusätzliche Health-Connect-Leseberechtigungen freigeben.

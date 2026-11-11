@@ -1,3 +1,4 @@
+import { homeElements } from "../app/canvas";
 import { Page } from "@playwright/test";
 export const testCatalog = [
   {
@@ -44,21 +45,54 @@ export const testCatalog = [
     sizes: [3, 6, 12],
     options: { path: "" },
   },
+  {
+    type: "text",
+    title: "Text",
+    sizes: [3, 6, 12],
+    options: { text: "Your text", size: 28, align: "left", bold: false },
+  },
+  {
+    type: "clock",
+    title: "Clock",
+    sizes: [3, 6, 12],
+    options: {
+      timezone: "Europe/Berlin",
+      format: "both",
+      seconds: false,
+      size: 32,
+    },
+  },
+  { type: "box", title: "Box", sizes: [3, 6, 12], options: {} },
+  {
+    type: "action",
+    title: "Shortcut",
+    sizes: [3, 6, 12],
+    options: { action: "tasks" },
+  },
+  { type: "spacer", title: "Space", sizes: [3, 6, 12], options: {} },
   { type: "agent", title: "AI chat", sizes: [3, 6, 12], options: {} },
 ];
 export function testConfig() {
   return {
     version: 0,
-    widgets: testCatalog
-      .filter((c) => ["health", "chart", "tasks", "music"].includes(c.type))
-      .map((c, i) => ({
-        id: "default-" + c.type,
-        type: c.type,
-        title: "",
-        options: structuredClone(c.options),
-        desktop: { order: i, width: c.type === "health" ? 12 : 6, height: 1 },
-        mobile: { order: i, width: 2, height: 1 },
-      })),
+    editor_version: 2,
+    widgets: [
+      ...homeElements(),
+      ...testCatalog
+        .filter((c) => ["health", "chart", "tasks", "music"].includes(c.type))
+        .map((c, i) => ({
+          id: "default-" + c.type,
+          type: c.type,
+          title: "",
+          options: structuredClone(c.options),
+          desktop: {
+            order: i + 3,
+            width: c.type === "health" ? 12 : 6,
+            height: 1,
+          },
+          mobile: { order: i + 3, width: 2, height: 1 },
+        })),
+    ],
   };
 }
 export async function mockWidgets(page: Page) {

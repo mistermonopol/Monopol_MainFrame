@@ -1,5 +1,11 @@
 # Prüfstand · 11. November 2026
 
+## Version 0.10: Vollständiger Home-Editor
+
+68 Backend-Tests erfolgreich, einschließlich Migration bestehender Widget-Konfigurationen auf bearbeitbare Begrüßung/Uhr/Verknüpfung, Container-Zuordnung und Validierung von Zeitzonen und Darstellung. 42 Browserprüfungen auf Desktop und Handy erfolgreich: neue Tests bearbeiten Text und Uhren in Boxen, entfernen den bisherigen Begrüßungstext, prüfen Größen, Persistenz und Responsive-Verhalten sowie tatsächliches Drag-and-drop in Boxen und Größenänderung mit dem Eckgriff. Vorhandene App-Abläufe bleiben geprüft. Der Eigenschaftsbereich lässt die Arbeitsfläche sichtbar und verdeckt die Speichern-Schaltfläche nicht.
+
+Android 0.10.0 als Debug-APK gebaut; neun Unit-Tests erfolgreich. Desktop-/Handyansicht und der Bearbeitungsmodus wurden zusätzlich mit simulierten Inhalten visuell geprüft; keine horizontalen Überläufe oder Browserfehler. Web-Produktionsbuild erfolgreich. Reales Touch-Verhalten und native Bedienung auf dem Pixel benötigen weiterhin den Gerätetest. Bedienung und Aktualisierung: [home-editor.md](home-editor.md).
+
 ## Version 0.9: Widget-Baukasten und Health-Zeitreihen
 
 67 Backend-Tests erfolgreich: einschließlich versionierter Widget-Konfiguration, Mehrfachinstanzen, unabhängiger Anordnungen, Speicherkonflikten, erlaubter Optionen, quellengetrennter Messreihen, idempotenter Fensterkorrekturen und Löschungen, Berliner Zeitumstellung, 90-Tage-Aufbewahrung sowie Kompatibilität älterer Tagesimporte. Das Löschen der Health-Daten invalidiert laufende neue Synchronisationspakete über eine Generation.

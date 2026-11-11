@@ -513,37 +513,41 @@ export default function Home() {
           </div>
         </header>
         <div className="content">
-          <div className="pageheading">
-            <div>
-              <div className="eyebrow">{t("DEIN PERSÖNLICHER WORKSPACE")}</div>
-              <h1>
-                {page === "dashboard"
-                  ? t("Willkommen im MainFrame.")
-                  : navigation.find((n) => n[0] === page)?.[1]}
-              </h1>
-              <p>
-                {new Date().toLocaleDateString(locale, {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "Europe/Berlin",
-                })}{" "}
-                <span className="divider">·</span>
-                {t("Mach Platz für das, was zählt.")}
-              </p>
+          {page !== "dashboard" && (
+            <div className="pageheading">
+              <div>
+                <div className="eyebrow">
+                  {t("DEIN PERSÖNLICHER WORKSPACE")}
+                </div>
+                <h1>
+                  {page === "dashboard"
+                    ? t("Willkommen im MainFrame.")
+                    : navigation.find((n) => n[0] === page)?.[1]}
+                </h1>
+                <p>
+                  {new Date().toLocaleDateString(locale, {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "Europe/Berlin",
+                  })}{" "}
+                  <span className="divider">·</span>
+                  {t("Mach Platz für das, was zählt.")}
+                </p>
+              </div>
+              {(page === "dashboard" || page === "tasks") && (
+                <button
+                  className="primary"
+                  disabled={!enabled}
+                  onClick={() => setEditor({ kind: "tasks" })}
+                >
+                  <Plus size={17} />
+                  {t("Neue Aufgabe")}
+                </button>
+              )}
             </div>
-            {(page === "dashboard" || page === "tasks") && (
-              <button
-                className="primary"
-                disabled={!enabled}
-                onClick={() => setEditor({ kind: "tasks" })}
-              >
-                <Plus size={17} />
-                {t("Neue Aufgabe")}
-              </button>
-            )}
-          </div>
+          )}
           {error && (
             <div className="notice" role="alert">
               {t(error)}
@@ -600,6 +604,7 @@ export default function Home() {
             <WidgetBoard
               layout={layout}
               language={language}
+              newTask={() => setEditor({ kind: "tasks" })}
               enabled={enabled}
               request={request}
               days={data.health.days}

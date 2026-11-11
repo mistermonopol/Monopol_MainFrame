@@ -260,13 +260,13 @@ class MainActivity : ComponentActivity() {
                 listOf("Aufgaben","Musik","Gesundheit","KI-Agent","Obsidian").forEach{label->OutlinedButton(onClick={screen=label},shape=RectangleShape){Text(t(label),fontSize=10.sp)}}
             }
             Column(Modifier.weight(1f).then(if(layout=="focus")Modifier.widthIn(max=720.dp) else Modifier.fillMaxWidth()).verticalScroll(rememberScrollState()).padding(if(layout=="control")12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(t(if (screen == "Übersicht") "Willkommen im MainFrame." else screen), style = MaterialTheme.typography.headlineSmall)
-                Text(LocalDate.now(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)), style = MaterialTheme.typography.labelMedium)
+                if(screen!="Übersicht")Text(t(if (screen == "Übersicht") "Willkommen im MainFrame." else screen), style = MaterialTheme.typography.headlineSmall)
+                if(screen!="Übersicht")Text(LocalDate.now(ZoneId.of("Europe/Berlin")).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(if(language=="de") Locale.GERMANY else Locale.UK)), style = MaterialTheme.typography.labelMedium)
                 if (message.isNotEmpty()) Card(shape = RectangleShape) { Text(t(message), Modifier.padding(14.dp)) }
                 Text(t(if (connected) "Server verbunden" else "Offline / Anmeldung nötig"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (store.get("loaded").isNotEmpty()) Text("${t("Letzter geladener Stand:")} ${dateText(store.get("loaded"))}", style = MaterialTheme.typography.labelSmall)
                 OutlinedButton(onClick = { refresh(sync = true) }, enabled = !busy, shape = RectangleShape) { Text(t(if (busy) "Wird geladen …" else "Aktualisieren")) }
-                if (screen == "Übersicht") WidgetDashboard(api,store,data,connected,language,layout,lifecycle,{screen=it},{refresh()}) { task -> ItemList("tasks",JSONArray().put(task)) }
+                if (screen == "Übersicht") WidgetDashboard(api,store,data,connected,language,layout,lifecycle,{screen=it},{refresh()},{editor="tasks" to null}) { task -> ItemList("tasks",JSONArray().put(task)) }
                 if(screen=="Musik") SpotifyDashboard(language)
                 val kind = when (screen) { "Aufgaben" -> "tasks"; "Musik" -> "music"; else -> null }
                 if (kind != null) {

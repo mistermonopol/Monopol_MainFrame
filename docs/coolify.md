@@ -1,5 +1,7 @@
 # Deployment auf monopol-ai.de mit Coolify
 
+**Aktuell: Version 0.10.** Nach dem Redeploy Android 0.10.0 installieren. Der Home-Editor ist über das Zahnrad erreichbar und unterstützt frei angeordnete Texte, Uhren, Verknüpfungen und responsive Container-Boxen. Vorhandene Widget-Einstellungen bleiben erhalten; es sind keine zusätzlichen Umgebungsvariablen nötig. [Home-Editor-Anleitung](home-editor.md).
+
 ## Widget-Dashboard, Health und Integrationen (Version 0.9)
 
 **Neu in 0.9:** Modularer Hauptscreen auf Web und Android mit synchronisierten Widget-Einstellungen, getrennten Desktop-/Handy-Anordnungen und erweiterten Health-Connect-Messreihen. `main` redeployen, Android 0.9.0 installieren und zusätzliche Health-Berechtigungen auf dem Pixel freigeben. Keine neuen Coolify-Umgebungsvariablen erforderlich. Zusätzliche Tabellen werden beim Start angelegt; beide bestehenden Datenbank-Volumes erhalten und vor dem Update sichern. Bedienung und Datenhaltung: [widgets-health.md](widgets-health.md).

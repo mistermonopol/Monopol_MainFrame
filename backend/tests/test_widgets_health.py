@@ -20,7 +20,7 @@ def test_widget_config_roundtrip_and_conflict(client):
 
 def test_widget_validation_and_catalog(client):
     catalog=client.get('/api/v1/dashboard/catalog').json()
-    assert {c['type'] for c in catalog}=={'health','metric','chart','tasks','lights','music','obsidian','agent'}
+    assert {c['type'] for c in catalog}=={'health','metric','chart','tasks','lights','music','obsidian','agent','text','clock','box','action','spacer'}
     config=client.get('/api/v1/dashboard/config').json()
     for mutate in [lambda c:c['widgets'].append(c['widgets'][0]),lambda c:c['widgets'][0]['mobile'].update(width=12),lambda c:c['widgets'][0].update(options={'metrics':['unknown']}),lambda c:c['widgets'][0].update(type='javascript')]:
         invalid=deepcopy(config);mutate(invalid)
@@ -91,3 +91,23 @@ def test_berlin_dst_samples_and_summary_backfill(client):
         result=client.get('/api/v1/health/series',params={'metric':'heart_rate','start':'2026-10-25','end':'2026-10-25'}).json()
         assert len(result['samples'])==2 and result['summary']['mean']==70
         assert client.put('/api/v1/health/sync',json={'days':[{'day':'2026-07-01','heart_rate':70}]}).status_code==422
+
+def test_canvas_elements_and_legacy_upgrade_preserve_content(client):
+    from app.db import Session,Item
+    old={'id':'old-task','type':'tasks','title':'My tasks','options':{'filter':'all'},'desktop':{'order':0,'width':6,'height':1},'mobile':{'order':0,'width':2,'height':1}}
+    with Session.begin() as db:db.add(Item(id='dashboard-config',kind='dashboard_config',version=5,data={'widgets':[old]}))
+    config=client.get('/api/v1/dashboard/config').json()
+    assert config['version']==5 and config['editor_version']==2
+    assert next(w for w in config['widgets'] if w['id']=='old-task')['title']=='My tasks'
+    assert {w['type'] for w in config['widgets']}=={'text','clock','action','tasks'}
+    box={'id':'box','type':'box','title':'Morning','options':{},'desktop':{'order':10,'width':7,'height':2},'mobile':{'order':10,'width':2,'height':2},'appearance':{'header':False,'border':True,'background':'accent','padding':12}}
+    config['widgets'].append(box)
+    config['widgets'][0]['parent_id']='box'
+    config['widgets'][0]['options']['text']='My own heading'
+    saved=client.put('/api/v1/dashboard/config',json=config)
+    assert saved.status_code==200 and saved.json()['widgets'][0]['parent_id']=='box'
+    assert client.get('/api/v1/dashboard/config').json()==saved.json()
+    invalid=saved.json();invalid['widgets'][-1]['parent_id']='box'
+    assert client.put('/api/v1/dashboard/config',json=invalid).status_code==422
+    invalid=saved.json();invalid['widgets'][1]['options']['timezone']='invalid/zone'
+    assert client.put('/api/v1/dashboard/config',json=invalid).status_code==422
