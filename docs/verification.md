@@ -1,4 +1,12 @@
-# Prüfstand · 1. November 2026
+# Prüfstand · 11. November 2026
+
+## Version 0.9: Widget-Baukasten und Health-Zeitreihen
+
+67 Backend-Tests erfolgreich: einschließlich versionierter Widget-Konfiguration, Mehrfachinstanzen, unabhängiger Anordnungen, Speicherkonflikten, erlaubter Optionen, quellengetrennter Messreihen, idempotenter Fensterkorrekturen und Löschungen, Berliner Zeitumstellung, 90-Tage-Aufbewahrung sowie Kompatibilität älterer Tagesimporte. Das Löschen der Health-Daten invalidiert laufende neue Synchronisationspakete über eine Generation.
+
+38 Browserprüfungen auf Desktop und Handy erfolgreich, einschließlich Widget-Hinzufügen, Umbenennen, Größenwahl, Verschieben, Speichern, Wiederherstellen nach Neuladen, Abbrechen, Speicherkonflikt und Pulsdiagramm mit Berechtigungsstatus. Alle vorhandenen Navigations-, Aufgaben-, Integrations-, Theme- und Layout-Abläufe bleiben geprüft. Web-Produktionsbuild erfolgreich. Desktop-/Handyansicht zusätzlich mit simulierten vollständigen Widget-Inhalten visuell geprüft: keine horizontalen Überläufe oder Browserfehler.
+
+Android 0.9.0 als Debug-APK gebaut; neun Unit-Tests einschließlich Rasteraufteilung erfolgreich. Die native Health-Connect-Anbindung ist gegen SDK 1.1.0 kompiliert. Reale Health-Connect-Datensätze, Uhrenhersteller, Freigaben und Hintergrundzustellung wurden ohne angeschlossenes Pixel nicht praktisch geprüft. Lokale Backend-Tests verwenden SQLite; PostgreSQL und vollständiger Docker-Start bleiben Teil der vorhandenen CI-Prüfung. Bedienung und Update: [widgets-health.md](widgets-health.md).
 
 Lokal erfolgreich ausgeführt:
 

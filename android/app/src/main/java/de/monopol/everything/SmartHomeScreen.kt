@@ -24,7 +24,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-@Composable fun SmartHomeScreen(api:Api,connected:Boolean,language:String,lifecycle:Lifecycle,settings:()->Unit,onChanged:()->Unit) {
+@Composable fun SmartHomeScreen(api:Api,connected:Boolean,language:String,lifecycle:Lifecycle,settings:()->Unit,onChanged:()->Unit,entityIds:List<String> = emptyList()) {
     fun t(s:String)=Localizer.text(s,language)
     val scope=rememberCoroutineScope()
     var data by remember{mutableStateOf(JSONObject())}
@@ -49,7 +49,7 @@ import java.util.UUID
     if(message.isNotBlank())Text(message,style=MaterialTheme.typography.bodySmall)
     if(status!="online"){Text(t("Die lokale Docker-Bridge muss laufen. Offline werden keine Schaltbefehle vorgemerkt."));OutlinedButton(onClick=settings,shape=RectangleShape){Text(t("Bridge einrichten"))}}
     OutlinedTextField(search,{search=it},label={Text(t("Lampen suchen"))},modifier=Modifier.fillMaxWidth(),shape=RectangleShape)
-    val lamps=(data.optJSONArray("lights")?:JSONArray()).objects().filter{(it.optString("name")+" "+it.optString("entity_id")).contains(search,true)}.sortedBy{it.optString("name")}
+    val lamps=(data.optJSONArray("lights")?:JSONArray()).objects().filter{entityIds.isEmpty()||it.optString("entity_id") in entityIds}.filter{(it.optString("name")+" "+it.optString("entity_id")).contains(search,true)}.sortedBy{it.optString("name")}
     lamps.forEach{lamp->key(lamp.getString("entity_id")){LightControls(lamp,status=="online"&&connected&&!busy,language){values->send(lamp.getString("entity_id"),values)}}}
     if(status=="online"&&lamps.isEmpty())Text(t("Keine light-Entitäten in Home Assistant gefunden."))
 }

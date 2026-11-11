@@ -1,3 +1,4 @@
+import { mockWidgets } from "./widget-fixture";
 import { test, expect } from "@playwright/test";
 test("light capabilities, commands and one-time bridge setup work", async ({
   page,
@@ -70,6 +71,7 @@ test("light capabilities, commands and one-time bridge setup work", async ({
       .getByRole("button", { name, exact: true })
       .click();
   }
+  await mockWidgets(page);
   await page.goto("/");
   await nav("Smart Home");
   await expect(
@@ -160,6 +162,7 @@ test("offline lights stay visible but cannot queue commands", async ({
           },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
   if (isMobile)
     await page

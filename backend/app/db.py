@@ -38,6 +38,21 @@ class HealthDay(HealthBase):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class HealthSeries(HealthBase):
+    __tablename__ = 'series'
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    metric: Mapped[str] = mapped_column(String, index=True)
+    day: Mapped[str] = mapped_column(String, index=True)
+    source: Mapped[str] = mapped_column(String)
+    data: Mapped[dict] = mapped_column(JSON)
+
+
+class HealthMeta(HealthBase):
+    __tablename__ = 'metadata'
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)
+
+
 engine = create_engine(settings.database_url, hide_parameters=True)
 health_engine = create_engine(settings.health_database_url, hide_parameters=True)
 Session = sessionmaker(engine)

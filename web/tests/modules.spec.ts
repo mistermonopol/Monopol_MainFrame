@@ -1,3 +1,4 @@
+import { mockWidgets } from "./widget-fixture";
 import { test, expect } from "@playwright/test";
 
 test("four themes persist and new music agent vault navigation works", async ({
@@ -63,6 +64,7 @@ test("four themes persist and new music agent vault navigation works", async ({
       .getByRole("button", { name, exact: true })
       .click();
   }
+  await mockWidgets(page);
   await page.goto("/");
   await nav("Settings");
   await expect(

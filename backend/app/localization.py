@@ -40,4 +40,9 @@ MESSAGES.update({
     'Diese Anfrage-ID wurde bereits für einen anderen Lichtbefehl verwendet.':'Request ID already used for another light command.',
     'Lichtbefehl nicht gefunden.':'Light command not found.',
 })
+MESSAGES.update({
+    'Das Dashboard wurde geändert. Vor dem Speichern neu laden.':'Dashboard changed. Reload before saving.',
+    'Gesundheitsdaten wurden gelöscht. Synchronisation neu starten.':'Health data was cleared. Restart synchronization.',
+    'Ungültige Gesundheitsabfrage.':'Invalid health query',
+})
 GERMAN_MESSAGES = {en: de for de, en in MESSAGES.items()}

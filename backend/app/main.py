@@ -250,9 +250,25 @@ class DayInput(BaseModel):
     resting_pulse: float | None = Field(default=None, gt=0, le=300)
     weight_kg: float | None = Field(default=None, gt=0, le=1000)
     weight_at: AwareDatetime | None = None
+    heart_rate: float | None = Field(default=None,gt=0,le=300)
+    heart_rate_min: float | None = Field(default=None,gt=0,le=300)
+    heart_rate_max: float | None = Field(default=None,gt=0,le=300)
+    heart_rate_last: float | None = Field(default=None,gt=0,le=300)
+    heart_rate_at: AwareDatetime | None = None
+    hrv_ms: float | None = Field(default=None,ge=0,le=1000)
+    oxygen_pct: float | None = Field(default=None,ge=0,le=100)
+    respiratory_rate: float | None = Field(default=None,gt=0,le=100)
+    distance_m: float | None = Field(default=None,ge=0,le=1000000)
+    active_kcal: float | None = Field(default=None,ge=0,le=50000)
+    total_kcal: float | None = Field(default=None,ge=0,le=50000)
+    exercise_minutes: float | None = Field(default=None,ge=0,le=1440)
 
     @model_validator(mode="after")
     def weight_timestamp(self):
+        if (self.heart_rate_last is None) != (self.heart_rate_at is None):
+            raise ValueError('Heart rate and measurement time must be supplied together')
+        if self.heart_rate_at and (self.heart_rate_at.astimezone(ZoneInfo('Europe/Berlin')).date()!=self.day or self.heart_rate_at>now()+timedelta(minutes=5)):
+            raise ValueError('Invalid heart rate measurement time')
         if (self.weight_kg is None) != (self.weight_at is None):
             raise ValueError("Gewicht und Messzeitpunkt müssen gemeinsam vorliegen")
         if self.weight_at and self.weight_at.astimezone(ZoneInfo("Europe/Berlin")).date() != self.day:
@@ -275,7 +291,7 @@ def import_health(payload: HealthImport):
         for day in payload.days:
             row = db.get(HealthDay, day.day.isoformat())
             if row:
-                row.data = day.model_dump(mode="json")
+                row.data = {**row.data, **day.model_dump(mode="json", exclude_unset=True)}
                 row.updated_at = now()
             else:
                 db.add(HealthDay(day=day.day.isoformat(), data=day.model_dump(mode="json"), updated_at=now()))
@@ -285,14 +301,18 @@ def import_health(payload: HealthImport):
 @app.get("/api/v1/health/days", dependencies=[Depends(authenticated)])
 def health_days():
     with HealthSession() as db:
-        rows = list(db.scalars(select(HealthDay).order_by(HealthDay.day.desc())))
+        rows = list(db.scalars(select(HealthDay).order_by(HealthDay.day.desc()).limit(90)))
         return {"days": [r.data for r in rows], "last_sync": max((iso_stamp(r.updated_at) for r in rows), default=None)}
 
 
 @app.delete("/api/v1/health/days", dependencies=[Depends(authenticated)])
 def clear_health():
     with HealthSession.begin() as db:
+        from .db import HealthSeries, HealthMeta
         db.execute(delete(HealthDay))
+        db.execute(delete(HealthSeries))
+        db.execute(delete(HealthMeta))
+        db.add(HealthMeta(key="generation",data={"value":str(uuid4())}))
     return {"ok": True}
 
 
@@ -313,3 +333,8 @@ app.include_router(reminders_router, prefix="/api/v1", dependencies=[Depends(aut
 from .home_assistant import user_router as home_router, bridge_router
 app.include_router(home_router, dependencies=[Depends(authenticated)])
 app.include_router(bridge_router)
+
+from .widgets import router as widget_router
+from .health import router as health_router
+app.include_router(widget_router, dependencies=[Depends(authenticated)])
+app.include_router(health_router, dependencies=[Depends(authenticated)])

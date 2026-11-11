@@ -17,7 +17,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 from app.main import app, digest, login_failures
-from app.db import Session, SessionToken, Item, HealthSession, HealthDay, engine, health_engine
+from app.db import Session, SessionToken, Item, HealthSession, HealthDay, HealthSeries, HealthMeta, engine, health_engine
 from app.migrate import migrate
 import pytest
 
@@ -40,7 +40,8 @@ def client():
             db.query(model).delete()
         db.add(SessionToken(digest=digest("test-token"), expires=time.time() + 300))
     with HealthSession.begin() as db:
-        db.query(HealthDay).delete()
+        for model in [HealthDay, HealthSeries, HealthMeta]:
+            db.query(model).delete()
     with TestClient(app, base_url="https://life.test", headers={"Authorization": "Bearer test-token"}) as c:
         yield c
 

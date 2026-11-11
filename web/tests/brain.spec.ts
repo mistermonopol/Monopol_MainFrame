@@ -1,3 +1,4 @@
+import { mockWidgets } from "./widget-fixture";
 import { test, expect } from "@playwright/test";
 test("agent saves a task and the knowledge graph opens linked notes", async ({
   page,
@@ -81,6 +82,7 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
       .getByRole("button", { name, exact: true })
       .click();
   }
+  await mockWidgets(page);
   await page.goto("/");
   await nav("AI Agent");
   await page.getByLabel("Message the agent").fill("Create an Agent task");
@@ -182,6 +184,7 @@ test("task editor saves explicit reminder settings and browser push can be toggl
     }
     await r.fulfill({ json });
   });
+  await mockWidgets(page);
   await page.goto("/");
   await page.getByRole("button", { name: "New task", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill("Reminder task");

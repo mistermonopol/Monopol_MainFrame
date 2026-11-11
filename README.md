@@ -1,6 +1,8 @@
 # Monopol_MainFrame your App for Everything
 
-Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Aufgaben, Musikprojekte, API-gestützter KI-Chat und Obsidian-Notizen teilen sich einen Server. Health Connect liefert ausschließlich Tageswerte. Kalender und bisherige Notizen sind aus der Navigation entfernt; bestehende Daten bleiben gespeichert.
+Privater Workspace für PC und Pixel: Next.js, FastAPI, PostgreSQL und Kotlin/Compose. Aufgaben, Musikprojekte, API-gestützter KI-Chat und Obsidian-Notizen teilen sich einen Server. Der Hauptscreen besteht aus frei konfigurierbaren Widgets; Auswahl und Einstellungen werden synchronisiert, Desktop und Handy besitzen getrennte Anordnungen. Health Connect liefert Tageswerte und Messreihen für Puls, HRV, Sauerstoffsättigung, Atemfrequenz, Aktivität, Schlaf und Gewicht. Kalender und bisherige Notizen sind aus der Navigation entfernt; bestehende Daten bleiben gespeichert.
+
+**Version 0.9:** Widget-Baukasten und erweiterte Health-Berechtigungen sind in [docs/widgets-health.md](docs/widgets-health.md) beschrieben. Nach dem Server-Update Android 0.9.0 installieren und gewünschte zusätzliche Health-Connect-Leseberechtigungen freigeben.
 
 Die Oberfläche startet auf Englisch. Unter **Settings → Appearance** lassen sich vier eigenständige Layouts (**Index, Studio, Control, Focus**) unabhängig von vier Farbwelten (**Violet, Paper, Amber, Cyan**) wählen. Deutsch und Englisch bleiben separat wählbar; die Auswahl wird je Browser bzw. Android-Gerät gespeichert. Alle Bedienelemente und Karten haben scharfe, rechteckige Ecken. Consolas mit Monospace-Fallbacks, die einklappbare Seitenleiste und der mobile Drawer bleiben erhalten. Android verwendet die lokale Monospace-Systemschrift. Aufbau, Navigation und Modulansichten unterscheiden sich pro Layout; Details und Designreferenzen stehen in [docs/layouts.md](docs/layouts.md).
 

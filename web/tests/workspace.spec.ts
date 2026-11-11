@@ -1,3 +1,4 @@
+import { mockWidgets } from "./widget-fixture";
 import { test, expect } from "@playwright/test";
 
 async function openSettings(
@@ -25,6 +26,7 @@ test("English is default and language plus light theme persist with sharp corner
       },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(
@@ -34,7 +36,7 @@ test("English is default and language plus light theme persist with sharp corner
     page.getByText("Monopol_MainFrame your App for Everything", {
       exact: true,
     }),
-  ).toHaveCount(2);
+  ).toHaveCount(1);
   await openSettings(page, isMobile);
   await page.getByLabel("Theme", { exact: true }).selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -97,6 +99,7 @@ test("overview switches daily weekly and monthly step charts using recorded valu
       },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
   const chart = page.getByRole("region", { name: "Steps chart", exact: true });
   await expect(chart.locator(".chart-column")).toHaveCount(14);
@@ -137,6 +140,7 @@ test("password login opens the workspace without an external provider", async ({
       },
     });
   });
+  await mockWidgets(page);
   await page.goto("/");
   await page
     .getByLabel("Password", { exact: true })
@@ -179,6 +183,7 @@ test("create, complete and edit an actual dashboard task", async ({ page }) => {
     }
     return route.fulfill({ json: { ok: true } });
   });
+  await mockWidgets(page);
   await page.goto("/");
   await expect(page.getByText("Server connected")).toBeVisible();
   await page.getByRole("button", { name: "New task", exact: true }).click();
@@ -227,6 +232,7 @@ test("offline cache stays readable and writes are disabled", async ({
     ),
   );
   await page.route("**/api/v1/**", (r) => r.abort());
+  await mockWidgets(page);
   await page.goto("/");
   await expect(
     page.getByRole("button", { name: /Offline-Aufgabe/ }),
@@ -251,15 +257,16 @@ test("missing health values and disconnected services are explicit", async ({
       },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
-  await expect(page.getByText("Not connected", { exact: true })).toHaveCount(3);
-  await expect(page.locator(".stat strong").first()).toHaveText("—");
+  await expect(page.locator(".widget-vitals strong").first()).toContainText("—");
+  await expect(page.getByText("No measurement", { exact: true }).first()).toBeVisible();
   if (isMobile)
     await page
       .getByRole("button", { name: "Open navigation", exact: true })
       .click();
   await page.getByRole("button", { name: "Health", exact: true }).click();
-  await expect(page.getByText("No health data yet.")).toBeVisible();
+  await expect(page.getByText("No measurements for this period.")).toBeVisible();
 });
 
 test("left navigation collapses on desktop and opens as a keyboard accessible mobile drawer", async ({
@@ -276,6 +283,7 @@ test("left navigation collapses on desktop and opens as a keyboard accessible mo
       },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
   await expect(page).toHaveTitle("Monopol_MainFrame");
   const sidebar = page.locator("#sidebar");

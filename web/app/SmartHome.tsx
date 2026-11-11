@@ -211,6 +211,7 @@ function LightCard({
   );
 }
 export default function SmartHome({
+  entityIds = [],
   language,
   enabled,
   request,
@@ -220,6 +221,7 @@ export default function SmartHome({
   language: Language;
   enabled: boolean;
   request: Request;
+  entityIds?: string[];
   settings: () => void;
   onChanged: () => void;
 }) {
@@ -359,6 +361,9 @@ export default function SmartHome({
       </div>
       <div className="lights-grid">
         {(data?.lights || [])
+          .filter(
+            (light) => !entityIds.length || entityIds.includes(light.entity_id),
+          )
           .filter((light) =>
             (light.name + " " + light.entity_id)
               .toLowerCase()

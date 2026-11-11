@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Language, Theme, localeFor, translator, slogan } from "./i18n";
-import DashboardLayouts from "./DashboardLayouts";
+import WidgetBoard from "./WidgetBoard";
+import HealthWorkspace from "./HealthWidgets";
 import TaskWorkspace from "./TaskWorkspace";
 import NotificationSettings from "./NotificationSettings";
 import SmartHome, { BridgeSettings } from "./SmartHome";
@@ -596,19 +597,17 @@ export default function Home() {
             </div>
           )}
           {page === "dashboard" && (
-            <DashboardLayouts
+            <WidgetBoard
               layout={layout}
               language={language}
-              tasks={data.tasks}
-              homeStatus={data.smart_home?.status}
-              projects={data.music || []}
-              days={data.health.days}
-              taskRows={data.tasks
-                .slice(0, layout === "control" ? 6 : 4)
-                .map(taskRow)}
               enabled={enabled}
+              request={request}
+              days={data.health.days}
+              tasks={data.tasks}
+              projects={data.music || []}
+              row={taskRow}
               navigate={setPage}
-              newTask={() => setEditor({ kind: "tasks" })}
+              onChanged={() => void load()}
             />
           )}
           {page === "tasks" && (
@@ -620,63 +619,12 @@ export default function Home() {
             />
           )}
           {page === "health" && (
-            <section className="card panel">
-              <div className="paneltitle">
-                <h3>
-                  <HeartPulse size={18} /> Health Connect
-                </h3>
-                <span className="tag">
-                  {data.health.last_sync
-                    ? t("Synchronisiert")
-                    : t("Nicht verbunden")}
-                </span>
-              </div>
-              <p className="muted">
-                {t(
-                  "Leseberechtigungen und Synchronisation verwaltest du in der Android-App. Letzte Übertragung:",
-                )}{" "}
-                {data.health.last_sync
-                  ? dateText(data.health.last_sync)
-                  : t("Noch keine")}
-              </p>
-              <div className="tablewrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{t("Tag")}</th>
-                      <th>{t("Schritte")}</th>
-                      <th>{t("Schlaf (h)")}</th>
-                      <th>{t("Ruhepuls")}</th>
-                      <th>{t("Gewicht (kg)")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.health.days.map((d) => (
-                      <tr key={d.day}>
-                        <td>{d.day}</td>
-                        <td>{fmt(d.steps)}</td>
-                        <td>
-                          {fmt(
-                            d.sleep_minutes == null
-                              ? null
-                              : d.sleep_minutes / 60,
-                          )}
-                        </td>
-                        <td>{fmt(d.resting_pulse)}</td>
-                        <td>{fmt(d.weight_kg)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {!data.health.days.length && (
-                <div className="empty">
-                  <HeartPulse />
-                  <p>{t("Noch keine Gesundheitsdaten.")}</p>
-                  <span>{t("Verbinde Health Connect auf deinem Pixel.")}</span>
-                </div>
-              )}
-            </section>
+            <HealthWorkspace
+              request={request}
+              enabled={enabled}
+              language={language}
+              days={data.health.days}
+            />
           )}
           {["music", "agent", "obsidian"].includes(page) && (
             <WorkspaceModules
@@ -825,6 +773,7 @@ export default function Home() {
               <button
                 onClick={() => {
                   localStorage.removeItem("life-cache");
+                  localStorage.removeItem("mainframe-widgets");
                   setData(empty);
                   setLoaded("");
                 }}
@@ -856,6 +805,7 @@ export default function Home() {
                 onClick={async () => {
                   if (await mutate("/auth/logout", "POST")) {
                     localStorage.removeItem("life-cache");
+                    localStorage.removeItem("mainframe-widgets");
                     setData(empty);
                     setLoaded("");
                     setAuth(false);

@@ -266,7 +266,7 @@ class MainActivity : ComponentActivity() {
                 Text(t(if (connected) "Server verbunden" else "Offline / Anmeldung nötig"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (store.get("loaded").isNotEmpty()) Text("${t("Letzter geladener Stand:")} ${dateText(store.get("loaded"))}", style = MaterialTheme.typography.labelSmall)
                 OutlinedButton(onClick = { refresh(sync = true) }, enabled = !busy, shape = RectangleShape) { Text(t(if (busy) "Wird geladen …" else "Aktualisieren")) }
-                if (screen == "Übersicht") OverviewContent()
+                if (screen == "Übersicht") WidgetDashboard(api,store,data,connected,language,layout,lifecycle,{screen=it},{refresh()}) { task -> ItemList("tasks",JSONArray().put(task)) }
                 if(screen=="Musik") SpotifyDashboard(language)
                 val kind = when (screen) { "Aufgaben" -> "tasks"; "Musik" -> "music"; else -> null }
                 if (kind != null) {
@@ -274,17 +274,18 @@ class MainActivity : ComponentActivity() {
                     if(kind=="tasks") TaskRegister() else ItemList(kind, data.optJSONArray(kind) ?: JSONArray())
                 }
                 if (screen == "Gesundheit") {
-                    Text(t("Health Connect liest nur freigegebene Daten. Übertragen werden Tageswerte, keine Rohmessreihen."))
+                    Text(if(language=="de")"Health Connect liest freigegebene Tageswerte und Messreihen. Verwalte hier die Berechtigungen." else "Health Connect reads permitted daily values and time series. Manage permissions here.")
                     if (!healthAvailable) Text(t("Health Connect ist auf diesem Gerät nicht verfügbar."))
                     Button(onClick = { permissions.launch(HealthSync.permissions) }, enabled = healthAvailable, shape = RectangleShape) { Text(t("Leseberechtigungen verwalten")) }
                     if (healthAvailable && HealthSync(this@MainActivity).backgroundAvailable()) OutlinedButton(onClick = { permissions.launch(setOf(HealthSync.BACKGROUND)) }, shape = RectangleShape) { Text(t("Hintergrundzugriff erlauben")) }
                     Button(onClick = { store.put("syncEnabled", "true"); HealthSync.schedule(this@MainActivity); refresh(sync = true) }, enabled = connected && healthAvailable && !busy, shape = RectangleShape) { Text(t("Synchronisation aktivieren")) }
                     OutlinedButton(onClick = { store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); message = "Gesundheitssynchronisation gestoppt." }, shape = RectangleShape) { Text(t("Synchronisation stoppen")) }
                     Text("${t("Letzte Übertragung:")} ${data.optJSONObject("health")?.optString("last_sync")?.takeUnless { it == "null" }?.let {dateText(it)} ?: t("Noch keine")}")
+                    HealthSources(api,connected,language,data.optJSONObject("health")?.optJSONArray("days")?:JSONArray())
                     (data.optJSONObject("health")?.optJSONArray("days") ?: JSONArray()).objects().forEach { day -> Text(day.optString("day")); HealthCard(day) }
                 }
                 if(screen=="KI-Agent" || screen=="Obsidian") ConnectedModule(screen,api,connected,language){refresh()}
-                if(screen=="Smart Home")SmartHomeScreen(api,connected,language,lifecycle,{screen="Einstellungen"}){refresh()}
+                if(screen=="Smart Home")SmartHomeScreen(api,connected,language,lifecycle,{screen="Einstellungen"},{refresh()})
                 if (screen == "Einstellungen") SettingsContent()
             }
         }
@@ -447,21 +448,21 @@ class MainActivity : ComponentActivity() {
         Button(onClick = {
             val normalized = server.trim().trimEnd('/')
             if (normalized != store.get("server")) {
-                store.remove("token"); store.remove("cache"); store.remove("loaded")
+                store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); store.remove("healthGeneration")
                 store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
                 data = JSONObject(); connected = false
             }
             store.put("server", normalized); login(password) { password = "" }
         }, enabled = !busy && password.length >= 16, shape = RectangleShape) { Text(t("Anmelden")) }
         Text(t("Datenschutz"), style = MaterialTheme.typography.titleMedium)
-        Text(t("Gesundheitsdaten werden nur nach deiner Freigabe gelesen und als Tageswerte auf deinen Server übertragen. Der lokale Cache ist mit Android Keystore verschlüsselt. Android-Berechtigungen kannst du jederzeit in Health Connect widerrufen."))
-        OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); data = JSONObject(); message = "Lokaler Cache gelöscht." }, shape = RectangleShape) { Text(t("Lokalen Cache löschen")) }
+        Text(if(language=="de")"Freigegebene Health-Daten werden als Tageswerte und Messreihen auf deinen Server übertragen. Messreihen bleiben 90 Tage gespeichert. Den Zugriff kannst du in Health Connect widerrufen. Der lokale Cache ist mit Android Keystore verschlüsselt." else "Permitted health data is uploaded as daily summaries and time series. Time series are retained for 90 days. Revoke access in Health Connect at any time. The local cache is encrypted with Android Keystore.")
+        OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); data = JSONObject(); message = "Lokaler Cache gelöscht." }, shape = RectangleShape) { Text(t("Lokalen Cache löschen")) }
         OutlinedButton(onClick = { confirmDelete = true }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Gesundheitsdaten auf Server löschen")) }
         OutlinedButton(onClick = { mutate("/auth/logout", "POST") {
-            store.remove("token"); store.remove("cache"); store.remove("loaded"); store.put("syncEnabled", "false")
+            store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); store.put("syncEnabled", "false")
             WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); data = JSONObject(); connected = false
         } }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Abmelden")) }
-        if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(t("Gesundheitsdaten löschen?")) }, text = { Text(t("Alle Tageswerte werden auf dem Server gelöscht. Die Synchronisation auf diesem Pixel wird gestoppt.")) }, confirmButton = { TextButton(onClick = {
+        if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(t("Gesundheitsdaten löschen?")) }, text = { Text(if(language=="de")"Alle Tageswerte und Messreihen werden auf dem Server gelöscht. Die Synchronisation auf diesem Pixel wird gestoppt." else "All daily summaries and time series will be deleted from the server. Sync on this Pixel will stop.") }, confirmButton = { TextButton(onClick = {
             store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
             mutate("/health/days", "DELETE") { store.remove("cache"); confirmDelete = false }
         }, shape = RectangleShape) { Text(t("Löschen")) } }, dismissButton = { TextButton(onClick = { confirmDelete = false }, shape = RectangleShape) { Text(t("Abbrechen")) } }, shape = RectangleShape)

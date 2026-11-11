@@ -1,3 +1,4 @@
+import { mockWidgets } from "./widget-fixture";
 ﻿import { test, expect } from "@playwright/test";
 test("every structural layout supports every palette and preserves the workspace", async ({
   page,
@@ -32,6 +33,7 @@ test("every structural layout supports every palette and preserves the workspace
       },
     }),
   );
+  await mockWidgets(page);
   await page.goto("/");
   async function navigate(label: string) {
     if (isMobile)
