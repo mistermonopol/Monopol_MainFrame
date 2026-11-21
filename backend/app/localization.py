@@ -1,7 +1,8 @@
 MESSAGES = {
     "Bitte anmelden": "Please sign in",
     "Ungültiger Ursprung": "Invalid request origin",
-    "Passwort ist falsch": "Incorrect password",
+    "Passwort oder Authentifizierungscode ist ungültig.": "Invalid password or authenticator code.",
+    "Passwort und sechsstelligen Authentifizierungscode eingeben.": "Enter your password and six-digit authenticator code.",
     "Zu viele Anmeldeversuche. Bitte in einer Minute erneut versuchen.": "Too many sign-in attempts. Please try again in one minute.",
     "Eintrag wurde geändert. Bitte neu laden.": "This item has changed. Please reload.",
     "Eintrag fehlt": "Item not found",

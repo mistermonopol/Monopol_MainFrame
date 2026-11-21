@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, String, Integer, JSON, DateTime
+from sqlalchemy import create_engine, BigInteger, String, Integer, JSON, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from .config import settings
 
@@ -29,6 +29,12 @@ class SessionToken(Base):
     __tablename__ = "sessions"
     digest: Mapped[str] = mapped_column(String, primary_key=True)
     expires: Mapped[float]
+
+
+class AuthenticatorUse(Base):
+    __tablename__ = 'authenticator_uses'
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    step: Mapped[int] = mapped_column(BigInteger)
 
 
 class HealthDay(HealthBase):

@@ -30,10 +30,12 @@ services:
       HEALTH_DATABASE_URL: postgresql+psycopg://life_health:${HEALTH_DB_PASSWORD}@db/life
       PUBLIC_URL: ${PUBLIC_URL:?Set the external HTTPS URL without a trailing slash}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a strong login password of at least 16 characters}
+      ADMIN_TOTP_SECRET: ${ADMIN_TOTP_SECRET:?Set the private Base32 authenticator secret}
       COOKIE_SECURE: "true"
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_MODEL: ${AI_MODEL:-}
       AI_API_KEY: ${AI_API_KEY:-}
+      NEWS_ENABLED: ${NEWS_ENABLED:-false}
       OBSIDIAN_VAULT_PATH: /vault
       OBSIDIAN_VAULT_NAME: ${OBSIDIAN_VAULT_NAME:-mono_frame_brain}
     volumes:

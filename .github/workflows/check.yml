@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   deployment:
     runs-on: ubuntu-latest
+    env:
+      ADMIN_TOTP_SECRET: GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ # Public RFC test seed; CI only.
     steps:
       - uses: actions/checkout@v4
       - name: Validate Coolify Compose

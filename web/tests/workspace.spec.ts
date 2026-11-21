@@ -117,7 +117,7 @@ test("overview switches daily weekly and monthly step charts using recorded valu
   ).toBe(true);
 });
 
-test("password login opens the workspace without an external provider", async ({
+test("password and authenticator code open the workspace",  async ({
   page,
 }) => {
   let loggedIn = false;
@@ -125,6 +125,7 @@ test("password login opens the workspace without an external provider", async ({
     if (route.request().url().endsWith("/auth/login")) {
       expect(route.request().postDataJSON()).toEqual({
         password: "my-private-password-2026",
+        totp_code: "012345",
       });
       loggedIn = true;
       return route.fulfill({ json: { ok: true } });
@@ -145,7 +146,10 @@ test("password login opens the workspace without an external provider", async ({
   await page
     .getByLabel("Password", { exact: true })
     .fill("my-private-password-2026");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const signIn = page.getByRole("button", { name: "Sign in", exact: true });
+  await expect(signIn).toBeDisabled();
+  await page.getByLabel("Authenticator code").fill("012345");
+  await signIn.click();
   await expect(
     page.getByRole("button", { name: "New task", exact: true }),
   ).toBeEnabled();

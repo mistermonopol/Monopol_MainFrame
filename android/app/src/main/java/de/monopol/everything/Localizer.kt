@@ -4,6 +4,16 @@ package de.monopol.everything
 object Localizer {
     private val english = mapOf(
         "Übersicht" to "Overview",
+        "Authentifizierungscode" to "Authenticator code",
+        "Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an." to "Sign in with your password and the code from your authenticator app.",
+        "Passwort oder Authentifizierungscode ist ungültig." to "Invalid password or authenticator code.",
+        "Passwort und sechsstelligen Authentifizierungscode eingeben." to "Enter your password and six-digit authenticator code.",
+        "Nachrichtenfeed" to "News feed",
+        "Nachrichten suchen und im Feed speichern" to "Find and save news",
+        "Suche aktuelle Schlagzeilen und speichere eine Auswahl im Nachrichtenfeed." to "Find current headlines and save a selection to the news feed.",
+        "Noch keine Nachrichten gespeichert." to "No news saved yet.",
+        "Original öffnen" to "Read original",
+        "Nachrichten gespeichert" to "News saved",
         "Aufgaben" to "Tasks",
         "Aufgabe" to "Task",
         "Notizen" to "Notes",

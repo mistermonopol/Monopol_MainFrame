@@ -11,7 +11,11 @@ import java.util.concurrent.TimeUnit
 
 class Api(private val store: Store) {
     private fun t(source: String) = Localizer.text(source,store.get("language").ifBlank { "en" })
-    private val client = OkHttpClient.Builder().callTimeout(75, TimeUnit.SECONDS).followRedirects(false).build()
+    companion object {
+        private val client = OkHttpClient.Builder().callTimeout(75, TimeUnit.SECONDS).followRedirects(false).build()
+        // Agent chat returns one response after up to 60 seconds of provider and tool calls.
+        private val agentClient = client.newBuilder().readTimeout(70, TimeUnit.SECONDS).build()
+    }
     suspend fun call(path: String, method: String = "GET", body: JSONObject? = null): String = withContext(Dispatchers.IO) {
         val server = store.get("server").trimEnd('/')
         require(server.startsWith("https://")) { t("Bitte eine HTTPS-Serveradresse eintragen.") }
@@ -19,10 +23,13 @@ class Api(private val store: Store) {
             .header("Authorization", "Bearer ${store.get("token")}")
             .header("Accept-Language",store.get("language").ifBlank { "en" })
             .method(method, if (method == "GET") null else (body?.toString() ?: "").toRequestBody("application/json".toMediaType())).build()
-        client.newCall(request).execute().use { response ->
+        val transport = if (path == "/agent/chat") agentClient else client
+        transport.newCall(request).execute().use { response ->
             val text = response.body?.string() ?: "{}"
-            if (response.code == 401) throw IllegalStateException(t(if (path == "/auth/native/login") "Passwort ist falsch" else "Sitzung abgelaufen. Bitte erneut anmelden."))
-            if (response.code == 409) throw IllegalStateException(t("Eintrag wurde geändert. Bitte neu laden."))
+            if (response.code == 401 && path != "/auth/native/login") {
+                throw IllegalStateException(t("Sitzung abgelaufen. Bitte erneut anmelden."))
+            }
+
             if (!response.isSuccessful) throw IllegalStateException(t(runCatching { JSONObject(text).optString("detail", "${t("Serverfehler")} ${response.code}") }.getOrDefault("${t("Serverfehler")} ${response.code}")))
             text
         }

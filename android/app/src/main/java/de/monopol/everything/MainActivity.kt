@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); if(intent.getBooleanExtra("open_tasks",false)){screen="Aufgaben";refresh()}; if (intent.action?.contains("PERMISSION") == true) screen = "Einstellungen" }
 
-    private fun login(password: String, onSuccess: () -> Unit) {
+    private fun login(password: String, totpCode: String, onSuccess: () -> Unit) {
         try {
             val base = Uri.parse(store.get("server"))
             require(base.scheme == "https" && !base.host.isNullOrEmpty() && base.userInfo == null && base.query == null && (base.path.isNullOrEmpty() || base.path == "/")) { "Bitte die HTTPS-Basisadresse deines Servers eintragen." }
@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch {
                 busy = true
                 try {
-                    val result = JSONObject(api.call("/auth/native/login", "POST", JSONObject().put("password", password)))
+                    val result = JSONObject(api.call("/auth/native/login", "POST", JSONObject().put("password", password).put("totp_code", totpCode)))
                     store.put("token", result.getString("access_token"))
                     onSuccess()
                     refresh(sync = true)
@@ -438,13 +438,17 @@ class MainActivity : ComponentActivity() {
         Text(t("Design"))
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Violet","light" to "Paper","amber" to "Amber","cyan" to "Cyan").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
         Text(t("Einstellungen werden auf diesem Gerät gespeichert."),style=MaterialTheme.typography.bodySmall)
-        var server by remember { mutableStateOf(store.get("server").ifBlank { "https://monopol-ai.de" }) }
+        var server by remember { mutableStateOf(store.get("server").ifBlank { "https://main.monopol-ai.de" }) }
         var password by remember { mutableStateOf("") }
+        var totpCode by remember { mutableStateOf("") }
         var confirmDelete by remember { mutableStateOf(false) }
         Text(t("Serververbindung"), style = MaterialTheme.typography.titleMedium)
-        Text(t("Melde dich mit deinem persönlichen Passwort bei https://monopol-ai.de an."))
+        Text(t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an."))
         OutlinedTextField(server, { server = it }, label = { Text(t("Serveradresse (HTTPS)")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RectangleShape)
         OutlinedTextField(password, { password = it }, label = { Text(t("Passwort")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), shape = RectangleShape)
+        OutlinedTextField(totpCode, { totpCode = it.filter { digit -> digit in '0'..'9' }.take(6) },
+            label = { Text(t("Authentifizierungscode")) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RectangleShape)
         Button(onClick = {
             val normalized = server.trim().trimEnd('/')
             if (normalized != store.get("server")) {
@@ -452,8 +456,11 @@ class MainActivity : ComponentActivity() {
                 store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
                 data = JSONObject(); connected = false
             }
-            store.put("server", normalized); login(password) { password = "" }
-        }, enabled = !busy && password.length >= 16, shape = RectangleShape) { Text(t("Anmelden")) }
+            store.put("server", normalized)
+            val submittedCode = totpCode
+            totpCode = ""
+            login(password, submittedCode) { password = "" }
+        }, enabled = !busy && password.length >= 16 && totpCode.length == 6, shape = RectangleShape) { Text(t("Anmelden")) }
         Text(t("Datenschutz"), style = MaterialTheme.typography.titleMedium)
         Text(if(language=="de")"Freigegebene Health-Daten werden als Tageswerte und Messreihen auf deinen Server übertragen. Messreihen bleiben 90 Tage gespeichert. Den Zugriff kannst du in Health Connect widerrufen. Der lokale Cache ist mit Android Keystore verschlüsselt." else "Permitted health data is uploaded as daily summaries and time series. Time series are retained for 90 days. Revoke access in Health Connect at any time. The local cache is encrypted with Android Keystore.")
         OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); data = JSONObject(); message = "Lokaler Cache gelöscht." }, shape = RectangleShape) { Text(t("Lokalen Cache löschen")) }

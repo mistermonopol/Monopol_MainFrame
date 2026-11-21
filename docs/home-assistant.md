@@ -18,7 +18,7 @@ Keine Tokens im Chat, in Git, als URL-Parameter oder in Screenshots veröffentli
 Repository klonen bzw. aktualisieren. `.env.bridge.example` nach `.env.bridge` kopieren und dort eintragen:
 
 ```dotenv
-MAINFRAME_URL=https://monopol-ai.de
+MAINFRAME_URL=https://main.monopol-ai.de
 HA_URL=http://192.168.178.10:8123
 MAINFRAME_BRIDGE_TOKEN_PATH=./secrets/mainframe_bridge_token
 HA_TOKEN_PATH=./secrets/ha_token

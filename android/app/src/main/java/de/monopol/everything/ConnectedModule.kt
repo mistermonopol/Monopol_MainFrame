@@ -5,6 +5,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalUriHandler
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -21,6 +23,8 @@ import java.net.URLEncoder
     var messages by remember {mutableStateOf(listOf<Pair<String,String>>())}
     var graph by remember {mutableStateOf(JSONObject())}
     var actions by remember {mutableStateOf(JSONArray())}
+    var news by remember {mutableStateOf<JSONArray?>(null)}
+    var newsError by remember {mutableStateOf("")}
     var notes by remember {mutableStateOf(JSONArray())}
     var selected by remember {mutableStateOf<JSONObject?>(null)}
     var path by remember {mutableStateOf("")}
@@ -28,14 +32,33 @@ import java.net.URLEncoder
     var dirty by remember {mutableStateOf(false)}
     var pending by remember {mutableStateOf<String?>(null)}
     fun open(target:String) {scope.launch {busy=true;error="";try{selected=if(target.isBlank()) JSONObject().put("version","") else JSONObject(api.call("/obsidian/note?path="+URLEncoder.encode(target,"UTF-8")));path=target;content=selected?.optString("content")?:"";dirty=false}catch(e:Exception){error=e.message?:"Request failed"}finally{busy=false}}}
+    suspend fun refreshNews() {
+        if (!status.optBoolean("news") || !status.optBoolean("obsidian")) return
+        try {
+            news = JSONArray(api.call("/agent/news"))
+            newsError = ""
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            newsError = e.message ?: "Request failed"
+        }
+    }
     LaunchedEffect(screen,connected) {
         if(connected)try {
             status=JSONObject(api.call("/integrations"))
-            if(screen=="KI-Agent"){val activity=JSONArray(api.call("/agent/activity"));if(activity.length()>0)actions=activity.getJSONObject(0).optJSONArray("actions")?:JSONArray()}
+            if (screen == "KI-Agent") {
+                refreshNews()
+                val activity = JSONArray(api.call("/agent/activity"))
+                actions = activity.optJSONObject(0)?.optJSONArray("actions") ?: JSONArray()
+            }
             if(screen=="Obsidian"&&status.optBoolean("obsidian")) {
                 notes=JSONArray(api.call("/obsidian/notes"));graph=JSONObject(api.call("/obsidian/graph"))
             }
-        }catch(e:Exception){error=e.message?:"Request failed"}
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Request failed"
+        }
     }
     if(error.isNotBlank()) Text(t(error),color=MaterialTheme.colorScheme.error)
     if(screen=="KI-Agent") {
@@ -44,12 +67,80 @@ import java.net.URLEncoder
         if(!status.optBoolean("ai")) Text(t("API nicht verbunden")) else Text(status.optString("model"),color=MaterialTheme.colorScheme.primary)
         messages.forEach {(role,text)->Card(Modifier.fillMaxWidth(),shape=RectangleShape){Column(Modifier.padding(14.dp)){Text(if(role=="user")"YOU" else "MAINFRAME AGENT",style=MaterialTheme.typography.labelSmall);Text(text)}}}
         if(busy) Text(t("Agent denkt nach…"))
-        OutlinedTextField(prompt,{prompt=it.take(12000)},label={Text(t("Nachricht an den Agenten"))},modifier=Modifier.fillMaxWidth(),shape=RectangleShape)
-        Button(enabled=connected&&status.optBoolean("ai")&&!busy&&prompt.isNotBlank(),shape=RectangleShape,onClick={
-            val next=messages+Pair("user",prompt.trim());messages=next;prompt="";busy=true;error=""
-            scope.launch{try{val history=JSONArray();next.takeLast(29).forEach{(role,text)->history.put(JSONObject().put("role",role).put("content",text))};val result=JSONObject(api.call("/agent/chat","POST",JSONObject().put("messages",history).put("request_id",java.util.UUID.randomUUID().toString())));messages=next+Pair("assistant",result.getString("reply"));actions=result.optJSONArray("actions")?:JSONArray()}catch(e:Exception){error=e.message?:"Request failed"}finally{try{val activity=JSONArray(api.call("/agent/activity"));if(activity.length()>0)actions=activity.getJSONObject(0).optJSONArray("actions")?:JSONArray();onChanged()}catch(_:Exception){};busy=false}}
-        }){Text(t("Senden"))}
-        for(i in 0 until actions.length()){val action=actions.getJSONObject(i);Text("✓ ${t(if(action.optString("type")=="control_lights")"Lichtbefehl angenommen" else if(action.optString("type").startsWith("update"))"Eintrag aktualisiert" else "Eintrag erstellt")} · ${action.optString("title")}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)}
+        val newsAvailable = connected && status.optBoolean("news") && status.optBoolean("obsidian")
+        if (newsAvailable) OutlinedButton(enabled = !busy && status.optBoolean("ai"), shape = RectangleShape,
+            onClick = { prompt = t("Suche aktuelle Schlagzeilen und speichere eine Auswahl im Nachrichtenfeed.") }) {
+            Text(t("Nachrichten suchen und im Feed speichern"))
+        }
+        OutlinedTextField(prompt, { prompt = it.take(12000) }, enabled = !busy,
+            label = { Text(t("Nachricht an den Agenten")) }, modifier = Modifier.fillMaxWidth(), shape = RectangleShape)
+        Button(enabled = connected && status.optBoolean("ai") && !busy && prompt.isNotBlank(), shape = RectangleShape, onClick = {
+            val submitted = prompt.trim()
+            val next = messages + Pair("user", submitted)
+            prompt = ""
+            busy = true
+            error = ""
+            scope.launch {
+                try {
+                    val history = JSONArray()
+                    next.takeLast(29).forEach { (role, text) ->
+                        history.put(JSONObject().put("role", role).put("content", text.take(12000)))
+                    }
+                    val body = JSONObject().put("messages", history).put("request_id", java.util.UUID.randomUUID().toString())
+                    val result = JSONObject(api.call("/agent/chat", "POST", body))
+                    messages = next + Pair("assistant", result.getString("reply"))
+                    actions = result.optJSONArray("actions") ?: JSONArray()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    error = e.message ?: "Request failed"
+                    prompt = submitted
+                    // A failed reply can still have recorded successful tool actions.
+                    try {
+                        val activity = JSONArray(api.call("/agent/activity"))
+                        actions = activity.optJSONObject(0)?.optJSONArray("actions") ?: JSONArray()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {}
+                } finally {
+                    busy = false
+                }
+                refreshNews()
+                onChanged()
+            }
+        }) { Text(t("Senden")) }
+        for (i in 0 until actions.length()) {
+            val action = actions.getJSONObject(i)
+            val label = when (val type = action.optString("type")) {
+                "save_news" -> "Nachrichten gespeichert"
+                "control_lights" -> "Lichtbefehl angenommen"
+                else -> if (type.startsWith("update")) "Eintrag aktualisiert" else "Eintrag erstellt"
+            }
+            Text("✓ ${t(label)} · ${action.optString("title")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        }
+        if (newsAvailable) {
+            val uriHandler = LocalUriHandler.current
+            Text(t("Nachrichtenfeed"), style = MaterialTheme.typography.titleLarge)
+            if (newsError.isNotBlank()) Text(t(newsError), color = MaterialTheme.colorScheme.error)
+            news?.let { stories ->
+                if (stories.length() == 0) Text(t("Noch keine Nachrichten gespeichert."))
+                for (i in 0 until stories.length()) {
+                    val story = stories.getJSONObject(i)
+                    Card(Modifier.fillMaxWidth(), shape = RectangleShape) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(listOf(story.optString("source"), story.optString("published")).filter { it.isNotBlank() }.joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall)
+                            Text(story.optString("title"), style = MaterialTheme.typography.titleMedium)
+                            if (story.optString("snippet").isNotBlank()) Text(story.optString("snippet"))
+                            val url = story.optString("url")
+                            if (url.startsWith("https://")) TextButton(onClick = {
+                                try { uriHandler.openUri(url) } catch (e: IllegalArgumentException) { newsError = e.message ?: "Request failed" }
+                            }) { Text(t("Original öffnen")) }
+                        }
+                    }
+                }
+            }
+        }
     } else {
         Text(t("Dein Wissen, verbunden."),style=MaterialTheme.typography.titleLarge)
         if(!status.optBoolean("obsidian"))Text(t("Binde deinen Obsidian-Ordner auf dem Server ein und setze OBSIDIAN_VAULT_PATH. Deine Markdown-Dateien bleiben in deinem Vault."))

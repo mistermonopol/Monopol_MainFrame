@@ -20,7 +20,11 @@ Die Übersicht enthält ein Schrittediagramm: **Daily** zeigt 14 Tageswerte, **W
 
 UI-Übersetzungen liegen in `web/app/messages.json`. Nach Änderungen mit `node ops/generate-locales.mjs` die native Übersetzungstabelle neu erzeugen. Eigene Aufgaben, Notizen und Termine werden bei einem Sprachwechsel nicht übersetzt oder verändert. API-Fehler verwenden standardmäßig Englisch und berücksichtigen `Accept-Language: de`.
 
-**Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://monopol-ai.de`, Umgebungsvariablen und Passwort-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
+**Two-factor sign-in:** Web and Android require a password and an authenticator code. Configure `ADMIN_TOTP_SECRET` before deploying; see [setup and recovery](docs/sign-in.md).
+
+**Agent news:** Enable `NEWS_ENABLED=true` for on-demand public news lookup and a shared Obsidian-backed feed on web and Android. See [Agent news and Obsidian](docs/agent-news.md).
+
+**Coolify:** Verwende `compose.coolify.yaml`. Die Anleitung für `https://main.monopol-ai.de`, Umgebungsvariablen und Zwei-Faktor-Anmeldung steht in [docs/coolify.md](docs/coolify.md).
 
 ## Lokaler Home Assistant
 
@@ -31,12 +35,12 @@ Der Tab **Smart Home** und der Agent können Lampen an-/ausschalten, dimmen und 
 Voraussetzungen: Docker Engine mit Compose v2, HTTPS-Reverse-Proxy und verschlüsselter Serverdatenträger. Für Coolify stattdessen die verlinkte Anleitung und `compose.coolify.yaml` verwenden.
 
 1. `.env.example` nach `.env` kopieren. Vier unabhängige Secrets mit `openssl rand -hex 32` erzeugen: `ADMIN_PASSWORD` für die Anmeldung und drei Datenbankpasswörter. Das Anmeldepasswort muss mindestens 16 Zeichen haben; für die Datenbankpasswörter nur URL-sichere hexadezimale Zeichen verwenden.
-2. `PUBLIC_URL=https://monopol-ai.de` setzen, ohne abschließenden Slash. Es wird kein externes Konto und kein OAuth-Client benötigt.
+2. `PUBLIC_URL=https://main.monopol-ai.de` setzen, ohne abschließenden Slash. Es wird kein externes Konto und kein OAuth-Client benötigt.
 3. `docker compose up --build -d`. Die einmalige Datenbankinitialisierung legt getrennte Rollen und Schemas `core` und `health` an; der Migrationsdienst erstellt die initialen Tabellen. Passwörter nach der ersten Initialisierung erfordern zusätzlich eine Änderung der PostgreSQL-Rollen, nicht nur der `.env`.
 4. Den HTTPS-Reverse-Proxy für `monopol-ai.de` auf `127.0.0.1:3000` weiterleiten lassen. Web und API teilen denselben Ursprung; Datenbank und API haben keine veröffentlichten Ports. Bei Verwendung der separaten Coolify-Konfiguration übernimmt Coolify die HTTPS-Weiterleitung.
 5. URL auf dem PC öffnen und mit deinem `ADMIN_PASSWORD` anmelden. Dashboard beginnt leer. Es gibt keinen Demo-Login und keine Beispieldaten im produktiven Datenbestand.
 
-Prüfen: `docker compose ps`, `curl https://monopol-ai.de/api/v1/healthz`. Der Endpunkt prüft beide Datenbankverbindungen. `docker compose logs --tail 100 api` zeigt Betriebsfehler ohne absichtliche Protokollierung von Inhalten, Passwörtern oder Tokens. Der Server muss korrektes NTP verwenden. HTTP-Access-Logs sind deaktiviert.
+Prüfen: `docker compose ps`, `curl https://main.monopol-ai.de/api/v1/healthz`. Der Endpunkt prüft beide Datenbankverbindungen. `docker compose logs --tail 100 api` zeigt Betriebsfehler ohne absichtliche Protokollierung von Inhalten, Passwörtern oder Tokens. Der Server muss korrektes NTP verwenden. HTTP-Access-Logs sind deaktiviert.
 
 ## Android auf dem Pixel
 
@@ -58,7 +62,7 @@ Die App liest keine Daten älter als den verfügbaren Health-Connect-Zeitraum un
 - Gesundheitswerte pro Datum: aggregierte Schritte, Schlafdauer in Minuten (dem Tag des Schlafendes zugeordnet), Mittel der Ruhepulsmessungen und letzter Gewichtswert inklusive Messzeitpunkt. Health-Connect-Aggregationen berücksichtigen Quellenprioritäten bei Schritten und Schlaf. Überlappende Schlafintervalle werden vor der Aggregation vereinigt. Fehlende oder nicht freigegebene Werte bleiben `null`, keine künstlichen Nullwerte. Bei eingeschränkten Berechtigungen ersetzt ein Abgleich die Tageszeile einschließlich fehlender Werte.
 - Gesundheitsimporte ersetzen Datumsschlüssel idempotent. Gespeicherte Tage bleiben über den 30-Tage-Lesezeitraum hinaus erhalten, bis du sie löschst. Änderungen oder Löschungen in Health Connect werden im nachgelesenen Zeitraum übernommen.
 - Jede Bearbeitung und Löschung prüft die Version. Bei paralleler Änderung meldet die API `409`; aktualisieren und Änderung erneut durchführen. Es gibt keine automatische Konfliktzusammenführung.
-- Web verwendet HttpOnly-/Secure-/SameSite-Cookies und Ursprungsprüfung für Anmeldung und Änderungen. Android nutzt Bearer-Tokens. Sitzungen laufen nach sieben Tagen ab; Abmelden widerruft die aktuelle Sitzung. Beide Clients verwenden ein persönliches Passwort. Fünf falsche Anmeldeversuche innerhalb einer Minute sperren weitere Versuche vorübergehend; die Begrenzung gilt gemeinsam für Web und Android im einzelnen API-Prozess.
+- Web verwendet HttpOnly-/Secure-/SameSite-Cookies und Ursprungsprüfung für Anmeldung und Änderungen. Android nutzt Bearer-Tokens. Sitzungen laufen nach sieben Tagen ab; Abmelden widerruft die aktuelle Sitzung. Beide Clients benötigen ein persönliches Passwort und einen einmaligen Authenticator-Code. Fünf falsche Anmeldeversuche innerhalb einer Minute sperren weitere Versuche vorübergehend; die Begrenzung gilt gemeinsam für Web und Android im einzelnen API-Prozess.
 - `ADMIN_PASSWORD` ändern und die API neu starten widerruft alle bisherigen Sitzungen. Beim Wechsel von der früheren Anmeldung sind erneute Anmeldung und eine aktualisierte Android-App erforderlich. Bestehende Aufgaben und Gesundheitsdaten bleiben erhalten; eine gegebenenfalls vorhandene alte Tabelle `core.login_codes` wird nicht mehr verwendet.
 - Gesundheits- und Kerndaten liegen in getrennten PostgreSQL-Schemas mit unabhängigen Rollen. Ein API-Prozess hat beide Verbindungen; dies ist keine Isolation gegenüber einem kompromittierten Backend. Datenträger und Sicherungen müssen zusätzlich verschlüsselt sein.
 
@@ -74,11 +78,11 @@ Das Backend stellt OpenAPI unter `/openapi.json` und interaktive Dokumentation u
 | `DELETE /api/v1/items/{kind}/{id}?version=N` | Versionsgeprüfte Löschung |
 | `GET/PUT/DELETE /api/v1/health/days` | Tageswerte lesen, Stapel `{days:[...]}` importieren, alles löschen |
 | `GET /api/v1/session` | Aktuelles Konto |
-| `POST /api/v1/auth/login` | `{password}` gegen HttpOnly-Websitzung tauschen; Origin muss `PUBLIC_URL` entsprechen |
-| `POST /api/v1/auth/native/login` | `{password}` gegen Android-Bearer-Sitzung tauschen |
+| `POST /api/v1/auth/login` | `{password, totp_code}` gegen HttpOnly-Websitzung tauschen; Origin muss `PUBLIC_URL` entsprechen |
+| `POST /api/v1/auth/native/login` | `{password, totp_code}` gegen Android-Bearer-Sitzung tauschen |
 | `POST /api/v1/auth/logout` | Aktuelle Sitzung widerrufen |
 
-Backend lokal mit Python 3.12: virtuelle Umgebung anlegen, `pip install -r backend/requirements.txt`. `ADMIN_PASSWORD` mit mindestens 16 Zeichen setzen und für lokale Entwicklung `PUBLIC_URL=http://localhost:3000`, `COOKIE_SECURE=false`. In `backend/` zuerst `python -m app.migrate`, dann `uvicorn app.main:app --reload --no-access-log`. Ohne Datenbank-URLs werden getrennte lokale SQLite-Dateien verwendet; Produktion verwendet PostgreSQL.
+Backend lokal mit Python 3.12: virtuelle Umgebung anlegen, `pip install -r backend/requirements.txt`. `ADMIN_PASSWORD` mit mindestens 16 Zeichen und `ADMIN_TOTP_SECRET` wie in der [Anleitung](docs/sign-in.md) setzen; für lokale Entwicklung `PUBLIC_URL=http://localhost:3000`, `COOKIE_SECURE=false`. In `backend/` zuerst `python -m app.migrate`, dann `uvicorn app.main:app --reload --no-access-log`. Ohne Datenbank-URLs werden getrennte lokale SQLite-Dateien verwendet; Produktion verwendet PostgreSQL.
 
 Web: in `web/` `npm ci`, `npm run dev`. Der Next.js-Proxy leitet `/api` an `http://localhost:8000` weiter. Kein Health Connect direkt im Browser.
 

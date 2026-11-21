@@ -5,6 +5,7 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
   isMobile,
 }) => {
   let tasks: any[] = [];
+  let stories: { id: string; title: string; source: string; url: string }[] = [];
   const actions = [
     {
       type: "create_item",
@@ -28,14 +29,22 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
       json = {
         ai: true,
         obsidian: true,
+        news: true,
         writes: true,
         brain: "mono_frame_brain",
         model: "test",
       };
     else if (path.endsWith("/agent/activity"))
       json = tasks.length ? [{ actions, finished: true }] : [];
+    else if (path.endsWith("/agent/news")) json = stories;
     else if (path.endsWith("/agent/chat")) {
-      expect(r.request().postDataJSON().request_id).toMatch(/^[a-f0-9-]{36}$/);
+      const { request_id, messages } = r.request().postDataJSON();
+      expect(request_id).toMatch(/^[a-f0-9-]{36}$/);
+      if (messages.at(-1).content.includes("headlines")) {
+        stories = [{ id: "story-1", title: "Telescope launch", source: "BBC World", url: "https://www.bbc.com/news/telescope" }];
+        await r.fulfill({ json: { reply: "Saved the news.", actions: [{ type: "save_news", title: "News Feed.md" }] } });
+        return;
+      }
       tasks = [
         {
           id: "agent-task",
@@ -91,6 +100,12 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
     page.getByText("Saved the task.", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".agent-actions")).toContainText("Agent task");
+  const feed = page.getByRole("region", { name: "News feed" });
+  await expect(feed.getByText("No news saved yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Find and save news" }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(feed.getByRole("heading", { name: "Telescope launch" })).toBeVisible();
+  await expect(feed.getByRole("link", { name: "Read original" })).toHaveAttribute("href", "https://www.bbc.com/news/telescope");
   await nav("Tasks");
   await expect(page.getByRole("button", { name: /Agent task/ })).toBeVisible();
   await nav("Obsidian");

@@ -13,12 +13,15 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field, AwareDatetime, SecretStr, model_validator
 from sqlalchemy import select, delete, text
 
 from .config import settings
-from .db import Session, HealthSession, Item, SessionToken, HealthDay, now
+from .db import Session, HealthSession, Item, SessionToken, AuthenticatorUse, HealthDay, now
+from .mfa import decode_secret, verified_step
 from .localization import MESSAGES, GERMAN_MESSAGES
 
 @asynccontextmanager
@@ -49,6 +52,13 @@ async def localized_error(request: Request, error: StarletteHTTPException):
     return JSONResponse(status_code=error.status_code, content={"detail": detail}, headers=error.headers)
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, error: RequestValidationError):
+    if request.url.path.rstrip('/') in {'/api/v1/auth/login', '/api/v1/auth/native/login'}:
+        return await localized_error(request, HTTPException(422, 'Passwort und sechsstelligen Authentifizierungscode eingeben.'))
+    return await request_validation_exception_handler(request, error)
+
+
 @app.middleware("http")
 async def private_responses(request: Request, call_next):
     response = await call_next(request)
@@ -61,13 +71,16 @@ async def private_responses(request: Request, call_next):
 password_salt = secrets.token_bytes(16)
 password_key = hashlib.scrypt(settings.admin_password.get_secret_value().encode(),
                              salt=password_salt, n=16384, r=8, p=1)
-session_key = hashlib.sha256(settings.admin_password.get_secret_value().encode()).digest()
+totp_secret = decode_secret(settings.admin_totp_secret.get_secret_value())
+totp_fingerprint = hashlib.sha256(totp_secret).hexdigest()
+session_key = hmac.digest(totp_secret, b'mainframe-mfa-session-v1\0' +
+                          settings.admin_password.get_secret_value().encode(), 'sha256')
 login_failures = deque()
 login_lock = Lock()
 
 
 def digest(token):
-    # Password changes invalidate sessions, including sessions from the old login.
+    # Pre-MFA sessions and sessions from either previous credential are invalid.
     return hmac.new(session_key, token.encode(), hashlib.sha256).hexdigest()
 
 
@@ -94,9 +107,10 @@ def healthz():
 
 class LoginInput(BaseModel):
     password: SecretStr = Field(min_length=1, max_length=1024)
+    totp_code: SecretStr = Field(min_length=6, max_length=6)
 
 
-def verify_password(payload: LoginInput):
+def issue_session(payload: LoginInput):
     # One private account, one API process: a shared limit prevents IP spoofing
     # through proxies from bypassing throttling. No passwords are persisted.
     with login_lock:
@@ -108,25 +122,40 @@ def verify_password(payload: LoginInput):
                                 headers={"Retry-After": "60"})
         candidate = hashlib.scrypt(payload.password.get_secret_value().encode(),
                                    salt=password_salt, n=16384, r=8, p=1)
-        if not hmac.compare_digest(candidate, password_key):
-            login_failures.append(clock)
-            raise HTTPException(401, "Passwort ist falsch")
-        login_failures.clear()
+        step = verified_step(totp_secret, payload.totp_code.get_secret_value(), time.time())
+        if hmac.compare_digest(candidate, password_key) and step is not None:
+            raw = consume_code_and_create_session(step)
+            if raw is not None:
+                login_failures.clear()
+                return raw
+        login_failures.append(clock)
+        raise HTTPException(401, 'Passwort oder Authentifizierungscode ist ungültig.')
 
 
-def create_session():
-    raw = secrets.token_urlsafe(48)
+def consume_code_and_create_session(step):
+    from sqlalchemy.dialects.postgresql import insert as postgres_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
     with Session.begin() as db:
+        insert = sqlite_insert if db.get_bind().dialect.name == 'sqlite' else postgres_insert
+        statement = insert(AuthenticatorUse).values(fingerprint=totp_fingerprint, step=step)
+        # The same (or an older) code cannot issue a second session, even across processes.
+        used = db.scalar(statement.on_conflict_do_update(
+            index_elements=[AuthenticatorUse.fingerprint], set_={'step':step},
+            where=AuthenticatorUse.step < step,
+        ).returning(AuthenticatorUse.step))
+        if used is None:
+            return None
+        raw = secrets.token_urlsafe(48)
         db.add(SessionToken(digest=digest(raw), expires=time.time() + 86400 * 7))
-    return raw
+        return raw
 
 
 @app.post("/api/v1/auth/login")
 def login(payload: LoginInput, request: Request, response: Response):
     if request.headers.get("origin") != settings.public_url.rstrip("/"):
         raise HTTPException(403, "Ungültiger Ursprung")
-    verify_password(payload)
-    raw = create_session()
+    raw = issue_session(payload)
     response.set_cookie("life_session", raw, httponly=True, secure=settings.cookie_secure,
                         samesite="lax", max_age=86400 * 7, path="/")
     return {"ok": True}
@@ -134,8 +163,7 @@ def login(payload: LoginInput, request: Request, response: Response):
 
 @app.post("/api/v1/auth/native/login")
 def native_login(payload: LoginInput):
-    verify_password(payload)
-    return {"access_token": create_session(), "expires_in": 86400 * 7, "token_type": "Bearer"}
+    return {"access_token": issue_session(payload), "expires_in": 86400 * 7, "token_type": "Bearer"}
 
 
 @app.get("/api/v1/session", dependencies=[Depends(authenticated)])

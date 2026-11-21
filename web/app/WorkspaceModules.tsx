@@ -25,6 +25,7 @@ type Project = {
   location: string;
 };
 type Note = { path: string; content: string; version: string };
+type NewsStory = { id: string; title: string; url: string; source: string; snippet: string; published: string };
 export default function WorkspaceModules({
   page,
   language,
@@ -49,8 +50,11 @@ export default function WorkspaceModules({
   const [status, setStatus] = useState<{
     ai: boolean;
     obsidian: boolean;
+    news?: boolean;
     model: string;
   } | null>(null);
+  const [news, setNews] = useState<NewsStory[] | null>(null);
+  const [newsError, setNewsError] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Partial<Project> | null>(null);
   const [notes, setNotes] = useState<{ path: string; title: string }[]>([]);
@@ -64,8 +68,10 @@ export default function WorkspaceModules({
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
+    let completed = false;
     try {
       await action();
+      completed = true;
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -74,10 +80,18 @@ export default function WorkspaceModules({
           const rows = await request("/agent/activity");
           if (Array.isArray(rows)) {
             setActivity(rows);
-            if (rows[0]) setActions(rows[0].actions || []);
+            if (!completed && rows[0]) setActions(rows[0].actions || []);
           }
           onChanged?.();
         } catch {}
+        if (status?.news && status.obsidian) {
+          try {
+            setNews(await request("/agent/news"));
+            setNewsError("");
+          } catch (e) {
+            setNewsError((e as Error).message);
+          }
+        }
       }
       setBusy(false);
     }
@@ -93,6 +107,14 @@ export default function WorkspaceModules({
         if (page === "agent") {
           const rows = await request("/agent/activity");
           if (active && Array.isArray(rows)) setActivity(rows);
+          if (s.news && s.obsidian) {
+            try {
+              const stories = await request("/agent/news");
+              if (active) { setNews(stories); setNewsError(""); }
+            } catch (e) {
+              if (active) setNewsError((e as Error).message);
+            }
+          }
         }
         if (page === "music") {
           const rows = await request("/items/music");
@@ -372,6 +394,12 @@ export default function WorkspaceModules({
             ))}
             {busy && <p role="status">{t("Agent denkt nach…")}</p>}
           </div>
+          {status?.news && status.obsidian && (
+            <button type="button" disabled={!enabled || !status.ai || busy} onClick={() =>
+              setPrompt(t("Suche aktuelle Schlagzeilen und speichere eine Auswahl im Nachrichtenfeed."))}>
+              {t("Nachrichten suchen und im Feed speichern")}
+            </button>
+          )}
           <form
             className="chat-composer"
             onSubmit={(e) => {
@@ -387,7 +415,7 @@ export default function WorkspaceModules({
                 const result = await request("/agent/chat", {
                   method: "POST",
                   body: JSON.stringify({
-                    messages: next.slice(-29),
+                    messages: next.slice(-29).map(m => ({ ...m, content: m.content.slice(0, 12000) })),
                     request_id: crypto.randomUUID(),
                   }),
                 });
@@ -435,6 +463,21 @@ export default function WorkspaceModules({
               <p>{t("Noch keine Agenten-Aktionen.")}</p>
             )}
           </details>
+          {enabled && status?.news && status.obsidian && (
+            <section aria-label={t("Nachrichtenfeed")}>
+              <h3>{t("Nachrichtenfeed")}</h3>
+              {newsError && <p role="alert">{t(newsError)}</p>}
+              {news?.length === 0 && <p>{t("Noch keine Nachrichten gespeichert.")}</p>}
+              {news?.map(story => (
+                <article key={story.id} className="chat-message">
+                  <small>{story.source}{story.published && ` · ${story.published}`}</small>
+                  <h4>{story.title}</h4>
+                  {story.snippet && <p>{story.snippet}</p>}
+                  <a href={story.url} target="_blank" rel="noopener noreferrer">{t("Original öffnen")}</a>
+                </article>
+              ))}
+            </section>
+          )}
           {!status?.ai && (
             <p>
               {t(

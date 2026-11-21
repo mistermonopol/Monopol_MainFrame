@@ -135,6 +135,7 @@ export default function Home() {
     [loaded, setLoaded] = useState(""),
     [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -558,17 +559,19 @@ export default function Home() {
               className="card loginform"
               onSubmit={async (event) => {
                 event.preventDefault();
+                if (signingIn || !/^[0-9]{6}$/.test(totpCode)) return;
                 setSigningIn(true);
                 try {
                   await request("/auth/login", {
                     method: "POST",
-                    body: JSON.stringify({ password }),
+                    body: JSON.stringify({ password, totp_code: totpCode }),
                   });
                   setPassword("");
                   await load();
                 } catch (e) {
                   setError((e as Error).message);
                 } finally {
+                  setTotpCode("");
                   setSigningIn(false);
                 }
               }}
@@ -576,7 +579,7 @@ export default function Home() {
               <div>
                 <strong>{t("Dein privater Workspace")}</strong>
                 <small>
-                  {t("Melde dich mit deinem persönlichen Passwort an.")}
+                  {t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an.")}
                 </small>
               </div>
               <label htmlFor="login-password">{t("Passwort")}</label>
@@ -590,7 +593,20 @@ export default function Home() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
-              <button className="primary" disabled={signingIn}>
+              <label htmlFor="login-totp">{t("Authentifizierungscode")}</label>
+              <input
+                id="login-totp"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                disabled={signingIn}
+                value={totpCode}
+                onChange={(event) => setTotpCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+              />
+              <button className="primary" disabled={signingIn || totpCode.length !== 6}>
                 {signingIn ? t("Anmelden …") : t("Anmelden")}
               </button>
             </form>

@@ -1,4 +1,4 @@
-# Deployment auf monopol-ai.de mit Coolify
+# Deployment auf main.monopol-ai.de mit Coolify
 
 **Aktuell: Version 0.10.** Nach dem Redeploy Android 0.10.0 installieren. Der Home-Editor ist über das Zahnrad erreichbar und unterstützt frei angeordnete Texte, Uhren, Verknüpfungen und responsive Container-Boxen. Vorhandene Widget-Einstellungen bleiben erhalten; es sind keine zusätzlichen Umgebungsvariablen nötig. [Home-Editor-Anleitung](home-editor.md).
 
@@ -56,22 +56,22 @@ Bei reinem API-Start außerhalb Compose `OBSIDIAN_VAULT_PATH` auf einen vorhande
 
 Bestehende Deployments einmal redeployen, damit das neue Volume und die optionalen Variablen geladen werden. Keine Datenbank zurücksetzen, keine Volumes löschen.
 
-`compose.coolify.yaml` baut Web, API und PostgreSQL gemeinsam. Web und Android verwenden **https://monopol-ai.de** und deine persönliche Passwort-Anmeldung. Eine zusätzliche Netzwerk-App wird nicht benötigt.
+`compose.coolify.yaml` baut Web, API und PostgreSQL gemeinsam. Web und Android verwenden **https://main.monopol-ai.de**. Die Anmeldung benötigt dein Passwort und einen Code aus deiner Authenticator-App. Eine zusätzliche Netzwerk-App wird nicht benötigt.
 
 ## 1. DNS und Domain
 
-Beim DNS-Anbieter einen **A-Record** mit Host `@` auf die öffentliche IPv4 des Coolify-Servers setzen. DNS enthält keinen Port. Optional einen CNAME für `www` auf `monopol-ai.de` setzen und diesen Host zusätzlich in Coolify konfigurieren. Ein vorhandener AAAA-Record muss auf die passende erreichbare IPv6 desselben Servers zeigen.
+Beim DNS-Anbieter einen **A-Record** mit Host `main` auf die öffentliche IPv4 des Coolify-Servers setzen. DNS enthält keinen Port. Ein vorhandener AAAA-Record muss auf die passende erreichbare IPv6 desselben Servers zeigen.
 
 In Coolify die Domain ausschließlich dem Dienst **`web`** zuordnen:
 
 | Einstellung | Wert |
 | --- | --- |
 | Protokoll | HTTPS |
-| Domain | `monopol-ai.de` |
+| Domain | `main.monopol-ai.de` |
 | Interner Port | `3000` |
 | Pfad | leer |
 
-Bei einem gemeinsamen URL-Feld lautet der Wert `https://monopol-ai.de:3000`. Besucher verwenden **https://monopol-ai.de** ohne Portangabe. TCP 80 und 443 müssen den Coolify-Proxy erreichen. Die Compose-Datei veröffentlicht keine Host-Ports; der Proxy erreicht `web` über das interne Docker-Netz. API und Datenbank erhalten keine eigene öffentliche Domain.
+Bei einem gemeinsamen URL-Feld lautet der Wert `https://main.monopol-ai.de:3000`. Besucher verwenden **https://main.monopol-ai.de** ohne Portangabe. TCP 80 und 443 müssen den Coolify-Proxy erreichen. Die Compose-Datei veröffentlicht keine Host-Ports; der Proxy erreicht `web` über das interne Docker-Netz. API und Datenbank erhalten keine eigene öffentliche Domain.
 
 ## 2. Anwendung anlegen
 
@@ -87,8 +87,9 @@ Unter **Environment Variables → Production** diese Werte eintragen und jeweils
 
 | Variable | Wert |
 | --- | --- |
-| `PUBLIC_URL` | `https://monopol-ai.de` – ohne Port, Pfad oder abschließenden Slash |
+| `PUBLIC_URL` | `https://main.monopol-ai.de` – ohne Port, Pfad oder abschließenden Slash |
 | `ADMIN_PASSWORD` | Eigenes Anmeldepasswort mit mindestens 16 Zeichen |
+| `ADMIN_TOTP_SECRET` | Privater Base32-Schlüssel der Authenticator-App; siehe [Einrichtung](sign-in.md) |
 | `POSTGRES_PASSWORD` | Eigenständiges zufälliges Datenbankadministrator-Passwort |
 | `APP_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Kerndaten |
 | `HEALTH_DB_PASSWORD` | Eigenständiges zufälliges Passwort für Gesundheitsdaten |
@@ -103,9 +104,9 @@ Bestehende Datenbankpasswörter und das Datenvolume beim Update beibehalten: Ein
 ## 4. Deployen und nutzen
 
 1. **Deploy** wählen. Die Datenbank initialisiert Rollen und Schemas; danach erstellt die API Tabellen und startet. Alle drei Dienste sollen gesund sein.
-2. `https://monopol-ai.de/api/v1/healthz` aufrufen. Erwartet: `{"status":"ok"}`.
-3. **https://monopol-ai.de** öffnen und mit `ADMIN_PASSWORD` anmelden.
-4. In der aktualisierten Android-App unter Einstellungen **https://monopol-ai.de** und dasselbe Passwort verwenden. Eine früher gespeicherte andere Serveradresse einmal ändern. Danach Health-Connect-Leseberechtigungen erteilen und die Synchronisation aktivieren.
+2. `https://main.monopol-ai.de/api/v1/healthz` aufrufen. Erwartet: `{"status":"ok"}`.
+3. **https://main.monopol-ai.de** öffnen und mit `ADMIN_PASSWORD` plus Authenticator-Code anmelden.
+4. In der aktualisierten Android-App unter Einstellungen **https://main.monopol-ai.de** und dasselbe Passwort plus einen neuen Authenticator-Code verwenden. Eine früher gespeicherte andere Serveradresse einmal ändern. Danach Health-Connect-Leseberechtigungen erteilen und die Synchronisation aktivieren.
 
 Die Anmeldung benötigt kein externes Konto. Passwortänderungen mit anschließendem API-Neustart widerrufen bestehende Sitzungen; danach erneut anmelden.
 
@@ -123,13 +124,13 @@ Die Anmeldung benötigt kein externes Konto. Passwortänderungen mit anschließe
 | Fehler | Prüfung |
 | --- | --- |
 | `compose: command not found` | Custom Build Command und Custom Start Command vollständig leeren; Docker Compose als Build Pack wählen |
-| `required variable ... is missing` | Alle fünf Pflichtwerte unter Production mit Build time und Runtime setzen, speichern und neu deployen |
+| `required variable ... is missing` | Alle Pflichtwerte unter Production mit Build time und Runtime setzen, speichern und neu deployen |
 | Compose-Datei nicht gefunden | Branch `main`, Base Directory `/`, Compose Location `/compose.coolify.yaml` |
 | Datenbank-Passwortauthentifizierung fehlgeschlagen | Coolify-Werte und bereits initialisierte PostgreSQL-Rollen müssen übereinstimmen |
-| „Ungültiger Ursprung“ | Browseradresse und `PUBLIC_URL` müssen exakt übereinstimmen: `https://monopol-ai.de` |
+| „Ungültiger Ursprung“ | Browseradresse und `PUBLIC_URL` müssen exakt übereinstimmen: `https://main.monopol-ai.de` |
 | „No available server“ | Domain an `web`, interner Port 3000; Web, API und Datenbank müssen gesund sein |
 | Zertifikat oder DNS falsch | A-/AAAA-Records, TCP 80/443 und konfigurierte HTTPS-Domain prüfen |
-| „Passwort ist falsch“ | Exakt den Wert von `ADMIN_PASSWORD` verwenden; nach Änderungen neu deployen |
+| „Passwort oder Authentifizierungscode ist ungültig.“ | Passwort und Auto-Uhrzeit prüfen, einen neuen Code verwenden und nach einer Änderung des Secrets neu deployen |
 | Zu viele Anmeldeversuche | Eine Minute warten; Web und Android teilen sich die Begrenzung |
 
 Grundlage: [Docker Compose](https://coolify.io/docs/applications/builds/docker-compose), [Umgebungsvariablen](https://coolify.io/docs/applications/configuration/environment-variables) und [Domains](https://coolify.io/docs/core/networking/domains).

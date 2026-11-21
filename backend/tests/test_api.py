@@ -7,6 +7,7 @@ root = tempfile.TemporaryDirectory()
 os.environ["DATABASE_URL"] = os.getenv("TEST_DATABASE_URL", "sqlite:///" + str(Path(root.name) / "core.db"))
 os.environ["HEALTH_DATABASE_URL"] = os.getenv("TEST_HEALTH_DATABASE_URL", "sqlite:///" + str(Path(root.name) / "health.db"))
 os.environ["ADMIN_PASSWORD"] = "test-only-password-with-sufficient-entropy"
+os.environ['ADMIN_TOTP_SECRET'] = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'
 os.environ["PUBLIC_URL"] = "https://life.test"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -17,7 +18,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 from app.main import app, digest, login_failures
-from app.db import Session, SessionToken, Item, HealthSession, HealthDay, HealthSeries, HealthMeta, engine, health_engine
+from app.mfa import code_at, decode_secret, verified_step
+from app.db import Session, SessionToken, AuthenticatorUse, Item, HealthSession, HealthDay, HealthSeries, HealthMeta, engine, health_engine
 from app.migrate import migrate
 import pytest
 
@@ -36,7 +38,7 @@ def close_databases():
 def client():
     login_failures.clear()
     with Session.begin() as db:
-        for model in [Item, SessionToken]:
+        for model in [Item, SessionToken, AuthenticatorUse]:
             db.query(model).delete()
         db.add(SessionToken(digest=digest("test-token"), expires=time.time() + 300))
     with HealthSession.begin() as db:
@@ -133,6 +135,65 @@ def mock_ai(monkeypatch, handler, base='https://api.openai.com/v1'):
     monkeypatch.setattr(settings,'ai_api_key',SecretStr('test-secret-never-echo'))
     real_client=httpx.AsyncClient
     monkeypatch.setattr(integration.httpx,'AsyncClient',lambda **kwargs:real_client(transport=httpx.MockTransport(handler),**kwargs))
+
+
+def test_agent_looks_up_and_saves_only_current_news_results(client, monkeypatch, tmp_path):
+    import json
+    import httpx
+    from app import news
+    from app.config import settings
+
+    feed = news.parse_feed('BBC World', b'''<rss><channel><item>
+      <title>New space telescope</title><description><![CDATA[<b>Launch confirmed.</b>]]></description>
+      <link>https://www.bbc.com/news/telescope</link><pubDate>Sat, 21 Nov 2026 14:00:00 GMT</pubDate>
+      </item><item><title>Unsafe link</title><link>javascript:alert(1)</link></item>
+      <item><title>Other headline</title><link>https://www.bbc.com/news/other</link></item></channel></rss>''')
+    assert len(feed) == 2
+    assert feed[0].snippet == 'Launch confirmed.'
+
+    async def fetch():
+        return [feed, None]
+
+    monkeypatch.setattr(news, 'fetch_feeds', fetch)
+    monkeypatch.setattr(settings, 'news_enabled', True)
+    calls = 0
+
+    def provider(request):
+        nonlocal calls
+        calls += 1
+        payload = json.loads(request.content)
+        names = {tool['function']['name'] for tool in payload['tools']}
+        assert {'lookup_news', 'save_news', 'read_obsidian_note'} <= names
+        if calls == 1:
+            name, args = 'lookup_news', {'query':'telescope'}
+        elif calls == 2:
+            results = json.loads(payload['messages'][-1]['content'])
+            assert [row['id'] for row in results] == [feed[0].id]
+            name, args = 'save_news', {'ids':[feed[1].id]}
+        elif calls == 3:
+            assert json.loads(payload['messages'][-1]['content'])['saved'] is False
+            name, args = 'save_news', {'ids':[feed[0].id, feed[0].id]}
+        else:
+            assert len(json.loads(payload['messages'][-1]['content'])['added']) == 1
+            return httpx.Response(200, json={'choices':[{'message':{'role':'assistant','content':'Saved one headline.'}}]})
+        return httpx.Response(200, json={'choices':[{'message':{'role':'assistant','tool_calls':[
+            {'id':str(calls),'type':'function','function':{'name':name,'arguments':json.dumps(args)}}]}}]})
+
+    mock_ai(monkeypatch, provider)
+    monkeypatch.setattr(settings, 'obsidian_vault_path', str(tmp_path))
+    assert client.get('/api/v1/agent/news').json() == []
+    response = client.post('/api/v1/agent/chat', json={'messages':[{'role':'user','content':'Find and save telescope news.'}]})
+    assert response.status_code == 200
+    assert response.json()['actions'] == [{'type':'save_news', 'title':'News Feed.md'}]
+    saved = client.get('/api/v1/agent/news').json()
+    assert len(saved) == 1 and saved[0]['url'] == feed[0].url
+    assert client.get('/api/v1/agent/news', headers={'Authorization':'Bearer wrong'}).status_code == 401
+    assert news.save_stories([feed[0]]) == []
+    note = tmp_path / 'News Feed.md'
+    assert '[[AI_Brain]]' in note.read_text(encoding='utf-8')
+    note.write_text('# My existing news note', encoding='utf-8')
+    assert client.get('/api/v1/agent/news').status_code == 409
+    assert note.read_text(encoding='utf-8') == '# My existing news note'
 
 
 @pytest.mark.parametrize('base', [' https://api.openai.com/v1/ ', 'https://api.openai.com/v1/chat/completions/'])
@@ -396,10 +457,26 @@ def test_health_rejects_invalid_import(client):
     assert client.put("/api/v1/health/days", json={"days": [{"day": "2026-11-01", "steps": -1}]}).status_code == 422
 
 
-def test_native_password_login_and_logout(client):
-    path = "/api/v1/auth/native/login"
-    assert client.post(path, json={"password": "wrong"}).status_code == 401
-    result = client.post(path, json={"password": os.environ["ADMIN_PASSWORD"]})
+def login_payload(step=None):
+    secret = decode_secret(os.environ['ADMIN_TOTP_SECRET'])
+    if step is None:
+        step = int(time.time()) // 30
+    return {'password':os.environ['ADMIN_PASSWORD'], 'totp_code':code_at(secret, step)}
+
+
+def test_totp_matches_rfc_vector_and_rejects_outside_window():
+    secret = b'12345678901234567890'
+    assert code_at(secret, 1) == '287082'  # Last six digits of RFC 6238's SHA-1 result at t=59.
+    assert verified_step(secret, '287082', 59) == 1
+    assert verified_step(secret, '287082', 90) is None
+    assert verified_step(secret, '２８７０８２', 59) is None
+
+
+def test_native_mfa_login_and_logout(client):
+    path = '/api/v1/auth/native/login'
+    payload = login_payload()
+    assert client.post(path, json={**payload, 'password':'wrong'}).status_code == 401
+    result = client.post(path, json=payload)
     assert result.status_code == 200
     assert "set-cookie" not in result.headers
     assert result.json()["expires_in"] == 7 * 86400
@@ -415,12 +492,14 @@ def test_cookie_origin_protection(client):
     assert client.post("/api/v1/items/notes", json={"title": "Notiz"}, headers={"Origin": "https://life.test"}).status_code == 201
 
 
-def test_web_password_login(client):
-    client.headers.pop("Authorization")
-    assert client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}).status_code == 403
-    headers = {"Origin": "https://life.test"}
-    assert client.post("/api/v1/auth/login", json={"password": "wrong"}, headers=headers).status_code == 401
-    result = client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}, headers=headers)
+def test_web_mfa_login(client):
+    client.headers.pop('Authorization')
+    path = '/api/v1/auth/login'
+    payload = login_payload()
+    assert client.post(path, json=payload).status_code == 403
+    headers = {'Origin':'https://life.test'}
+    assert client.post(path, json={**payload, 'password':'wrong'}, headers=headers).status_code == 401
+    result = client.post(path, json=payload, headers=headers)
     assert result.status_code == 200
     assert "HttpOnly" in result.headers["set-cookie"]
     assert "Secure" in result.headers["set-cookie"]
@@ -430,20 +509,40 @@ def test_web_password_login(client):
     assert client.get("/api/v1/session").status_code == 401
 
 
+def test_no_password_only_login_or_cross_client_code_replay(client):
+    web = '/api/v1/auth/login'
+    native = '/api/v1/auth/native/login'
+    headers = {'Origin':'https://life.test'}
+    payload = login_payload()
+    for path in (web, native):
+        for invalid in ({'password':payload['password']}, {**payload, 'totp_code':'too-long'}):
+            result = client.post(path, json=invalid, headers=headers)
+            assert result.status_code == 422
+            assert payload['password'] not in result.text and 'too-long' not in result.text
+            assert 'set-cookie' not in result.headers
+    assert client.post(web, json=payload, headers=headers).status_code == 200
+    assert client.post(native, json=payload).status_code == 401
+    assert client.post(native, json=login_payload(int(time.time()) // 30 + 1)).status_code == 200
+
+
 def test_login_throttling(client):
     for _ in range(5):
-        assert client.post("/api/v1/auth/native/login", json={"password": "wrong"}).status_code == 401
-    result = client.post("/api/v1/auth/login", json={"password": os.environ["ADMIN_PASSWORD"]}, headers={"Origin": "https://life.test"})
+        assert client.post('/api/v1/auth/native/login', json={**login_payload(), 'totp_code':'abcdef'}).status_code == 401
+    result = client.post('/api/v1/auth/login', json=login_payload(), headers={'Origin':'https://life.test'})
     assert result.status_code == 429
     assert result.headers["Retry-After"] == "60"
     login_failures.clear()
     login_failures.extend([time.monotonic() - 61] * 5)
-    assert client.post("/api/v1/auth/native/login", json={"password": os.environ["ADMIN_PASSWORD"]}).status_code == 200
+    assert client.post('/api/v1/auth/native/login', json=login_payload()).status_code == 200
 
 
 def test_legacy_login_and_sessions_removed(client):
+    import hmac
+    old_key = hashlib.sha256(os.environ['ADMIN_PASSWORD'].encode()).digest()
     with Session.begin() as db:
+        db.add(SessionToken(digest=hmac.digest(old_key, b'password-only-token', 'sha256').hex(), expires=time.time() + 60))
         db.add(SessionToken(digest=hashlib.sha256(b"legacy-token").hexdigest(), expires=time.time() + 60))
+    assert client.get('/api/v1/session', headers={'Authorization':'Bearer password-only-token'}).status_code == 401
     assert client.get("/api/v1/session", headers={"Authorization": "Bearer legacy-token"}).status_code == 401
     assert client.get("/api/v1/auth/callback").status_code == 404
     assert client.post("/api/v1/auth/native/exchange", json={}).status_code == 404

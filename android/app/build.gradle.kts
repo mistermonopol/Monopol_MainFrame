@@ -3,7 +3,21 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android {
     namespace = "de.monopol.everything"
     compileSdk = 36
-    defaultConfig { applicationId = "de.monopol.everything"; minSdk = 34; targetSdk = 35; versionCode = 11; versionName = "0.10.0" }
+    defaultConfig {
+        applicationId = "de.monopol.everything"
+        minSdk = 34
+        targetSdk = 35
+        versionCode = 12
+        versionName = "0.10.1"
+        manifestPlaceholders["appLabel"] = "Monopol_MainFrame"
+    }
+    buildTypes {
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "Monopol_MainFrame Preview"
+        }
+    }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
