@@ -404,26 +404,25 @@ export default function WorkspaceModules({
             className="chat-composer"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!prompt.trim() || busy) return;
-              const next = [
-                ...messages,
-                { role: "user" as const, content: prompt.trim() },
-              ];
-              setMessages(next);
+              const submitted = prompt.trim();
+              if (!enabled || !status?.ai || !submitted || busy) return;
+              const next = [...messages, { role: "user" as const, content: submitted }];
               setPrompt("");
               void run(async () => {
-                const result = await request("/agent/chat", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    messages: next.slice(-29).map(m => ({ ...m, content: m.content.slice(0, 12000) })),
-                    request_id: crypto.randomUUID(),
-                  }),
-                });
-                setActions(result.actions || []);
-                setMessages([
-                  ...next,
-                  { role: "assistant", content: result.reply },
-                ]);
+                try {
+                  const result = await request("/agent/chat", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      messages: next.slice(-29).map(m => ({ ...m, content: m.content.slice(0, 12000) })),
+                      request_id: crypto.randomUUID(),
+                    }),
+                  });
+                  setActions(result.actions || []);
+                  setMessages([...next, { role: "assistant", content: result.reply }]);
+                } catch (error) {
+                  setPrompt(draft => draft || submitted);
+                  throw error;
+                }
               });
             }}
           >

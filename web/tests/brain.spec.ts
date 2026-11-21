@@ -5,6 +5,7 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
   isMobile,
 }) => {
   let tasks: any[] = [];
+  let attempts = 0;
   let stories: { id: string; title: string; source: string; url: string }[] = [];
   const actions = [
     {
@@ -40,6 +41,12 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
     else if (path.endsWith("/agent/chat")) {
       const { request_id, messages } = r.request().postDataJSON();
       expect(request_id).toMatch(/^[a-f0-9-]{36}$/);
+      attempts++;
+      if (attempts < 3) expect(messages).toEqual([{ role: "user", content: "Create an Agent task" }]);
+      if (attempts === 1) {
+        await r.fulfill({ status: 502, json: { detail: "Provider rejected the request." } });
+        return;
+      }
       if (messages.at(-1).content.includes("headlines")) {
         stories = [{ id: "story-1", title: "Telescope launch", source: "BBC World", url: "https://www.bbc.com/news/telescope" }];
         await r.fulfill({ json: { reply: "Saved the news.", actions: [{ type: "save_news", title: "News Feed.md" }] } });
@@ -94,8 +101,13 @@ test("agent saves a task and the knowledge graph opens linked notes", async ({
   await mockWidgets(page);
   await page.goto("/");
   await nav("AI Agent");
-  await page.getByLabel("Message the agent").fill("Create an Agent task");
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  const composer = page.getByLabel("Message the agent");
+  const send = page.getByRole("button", { name: "Send", exact: true });
+  await composer.fill("Create an Agent task");
+  await send.click();
+  await expect(page.getByText("Provider rejected the request.", { exact: true })).toBeVisible();
+  await expect(composer).toHaveValue("Create an Agent task");
+  await send.click();
   await expect(
     page.getByText("Saved the task.", { exact: true }),
   ).toBeVisible();

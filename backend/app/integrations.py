@@ -15,7 +15,7 @@ from sqlalchemy import select
 from .db import Item, Session, now
 
 from .config import settings
-from .ai_provider import connection, completion
+from .ai_provider import chat_payload, connection, completion
 
 router = APIRouter()
 vault_lock = Lock()
@@ -188,8 +188,7 @@ async def chat(data: ChatInput, principal=Depends(authenticated)):
         try:
             async with asyncio.timeout(60), httpx.AsyncClient(timeout=45, follow_redirects=False) as client:
                 for _ in range(5):
-                    answer = await completion(client, endpoint, headers, {'model':model,'messages':messages,'tools':tools(),
-                        'max_completion_tokens' if official else 'max_tokens':2000})
+                    answer = await completion(client, endpoint, headers, chat_payload(model, messages, tools(), official))
                     calls = answer.get('tool_calls', [])
                     if not calls:
                         result = {'reply':answer['content'],'model':model,'actions':actions,'request_id':str(data.request_id)}

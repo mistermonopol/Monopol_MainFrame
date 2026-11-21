@@ -26,15 +26,40 @@ def connection():
     return endpoint, model, {"Authorization": "Bearer " + key} if key else {}, official
 
 
+def chat_payload(model, messages, tools, official):
+    payload = {'model':model, 'messages':messages, 'tools':tools,
+               'max_completion_tokens' if official else 'max_tokens':2000}
+    # GPT-6 Luna permits function tools in Chat Completions only without reasoning.
+    if official and model == 'gpt-6-luna' and tools:
+        payload['reasoning_effort'] = 'none'
+    return payload
+
+
+UNKNOWN_PARAMETER_CODES = {'unsupported_parameter', 'unknown_parameter', 'extra_forbidden', 'value_error.extra'}
+TOKEN_PARAMETERS = {'max_tokens', 'max_completion_tokens'}
+
+
 def error_fields(response):
     try:
-        error = response.json().get('error', {})
+        body = response.json()
+    except ValueError:
+        return None, None, None
+    if not isinstance(body, dict):
+        return None, None, None
+    # Values are used only for classification, never echoed into errors/logs.
+    error = body.get('error')
+    if isinstance(error, dict):
+        return tuple(value if isinstance(value, str) else None
+                     for value in (error.get('code'), error.get('type'), error.get('param')))
+    details = body.get('detail')
+    if response.status_code == 422 and isinstance(details, list) and len(details) == 1:
+        error = details[0]
         if isinstance(error, dict):
-            # Values are used only for classification, never echoed into errors/logs.
-            return tuple(value if isinstance(value, str) else None
-                         for value in (error.get('code'), error.get('type'), error.get('param')))
-    except (ValueError, AttributeError):
-        pass
+            loc, code = error.get('loc'), error.get('type')
+            if (isinstance(loc, list) and len(loc) >= 2 and loc[0] == 'body'
+                    and isinstance(code, str) and isinstance(loc[1], str)):
+                # Only retry when the rejected field itself is a top-level parameter.
+                return code if len(loc) == 2 else None, None, loc[1]
     return None, None, None
 
 
@@ -56,7 +81,17 @@ def provider_error(response):
     elif code == 'context_length_exceeded':
         message = "AI model context limit exceeded. Start a new chat or use a model with a larger context window."
     elif status in {400, 422}:
-        message = "AI provider rejected the request parameters (HTTP 400/422). The model must support Chat Completions and, for vault access, tool calling."
+        field = param.split('[', 1)[0].split('.', 1)[0] if param else None
+        if field in {'tools', 'tool_choice'} or code == 'invalid_function_parameters':
+            message = "AI provider rejected tool calling or a tool schema. Check that AI_MODEL and the Chat Completions endpoint support function tools."
+        elif field == 'model':
+            message = "AI provider rejected the model parameter. Check the exact AI_MODEL value and its Chat Completions support."
+        elif field == 'messages':
+            message = "AI provider rejected the conversation format. Check that the configured model accepts Chat Completions messages and tool results."
+        elif field in TOKEN_PARAMETERS:
+            message = "AI provider rejected the output token limit. Check which token limit parameter and range the configured model supports."
+        else:
+            message = "AI provider rejected the request parameters (HTTP 400/422). The model must support Chat Completions and, for vault access, tool calling."
     elif status >= 500:
         message = "AI provider is temporarily unavailable (HTTP 5xx). Please retry later."
     else:
@@ -68,8 +103,8 @@ async def completion(client, endpoint, headers, payload):
     response = await client.post(endpoint, headers=headers, json=payload)
     # Some compatible gateways support only one token-limit name. Retry only a
     # rejected parameter, never successful generations or other failure classes.
-    code, _, param = error_fields(response) if response.status_code == 400 else (None, None, None)
-    if code == 'unsupported_parameter' and param in {'max_tokens', 'max_completion_tokens'} and param in payload:
+    code, _, param = error_fields(response) if response.status_code in {400, 422} else (None, None, None)
+    if code in UNKNOWN_PARAMETER_CODES and param in TOKEN_PARAMETERS and param in payload:
         alternate = 'max_completion_tokens' if param == 'max_tokens' else 'max_tokens'
         payload = {**payload, alternate: payload[param]}
         del payload[param]

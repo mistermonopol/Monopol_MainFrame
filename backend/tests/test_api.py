@@ -213,6 +213,34 @@ def test_openai_endpoint_and_token_parameter(client,monkeypatch,base):
     assert result.json()['reply']=='Ready'
 
 
+def test_openai_luna_uses_function_tools_without_reasoning_on_every_round(client, monkeypatch):
+    import json
+    import httpx
+    from app.config import settings
+
+    calls = []
+    def handle(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        assert payload['model'] == 'gpt-6-luna'
+        assert payload['reasoning_effort'] == 'none'
+        assert any(tool['function']['name'] == 'read_obsidian_note' for tool in payload['tools'])
+        if len(calls) == 1:
+            answer = {'role':'assistant', 'content':None, 'tool_calls':[
+                {'id':'call_data', 'type':'function', 'function':{'name':'read_app_data', 'arguments':'{}'}}]}
+        else:
+            assert payload['messages'][-1]['tool_call_id'] == 'call_data'
+            answer = {'role':'assistant', 'content':'Ready'}
+        return httpx.Response(200, json={'choices':[{'message':answer}]})
+
+    mock_ai(monkeypatch, handle)
+    monkeypatch.setattr(settings, 'ai_model', 'gpt-6-luna')
+    response = client.post('/api/v1/agent/chat', json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code == 200
+    assert response.json()['reply'] == 'Ready'
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize('status,code,expected',[
     (401,'invalid_api_key','HTTP 401'),(403,None,'HTTP 403'),
     (404,'model_not_found','AI_MODEL'),(404,None,'AI_BASE_URL'),
@@ -234,14 +262,19 @@ def test_ai_errors_are_actionable_without_echoing_secrets(client,monkeypatch,sta
     assert len(calls)==1  # No generation retries or redirects on auth/quota errors.
 
 
-def test_compatible_gateway_retries_only_rejected_token_parameter(client,monkeypatch):
+@pytest.mark.parametrize('status,rejection', [
+    (400, {'error': {'code': 'unsupported_parameter', 'param': 'max_tokens'}}),
+    (400, {'error': {'code': 'unknown_parameter', 'param': 'max_tokens'}}),
+    (422, {'detail': [{'type': 'extra_forbidden', 'loc': ['body', 'max_tokens']}]}),
+])
+def test_compatible_gateway_retries_only_rejected_token_parameter(client,monkeypatch,status,rejection):
     import httpx,json
     calls=[]
     def handle(request):
         data=json.loads(request.content);calls.append(data)
         if len(calls)==1:
             assert data['max_tokens']==2000
-            return httpx.Response(400,json={'error':{'code':'unsupported_parameter','param':'max_tokens'}})
+            return httpx.Response(status,json=rejection)
         assert data['max_completion_tokens']==2000
         assert 'max_tokens' not in data
         return httpx.Response(200,json={'choices':[{'message':{'role':'assistant','content':'Works'}}]})
@@ -249,6 +282,27 @@ def test_compatible_gateway_retries_only_rejected_token_parameter(client,monkeyp
     response=client.post('/api/v1/agent/chat',json={'messages':[{'role':'user','content':'Hi'}]})
     assert response.status_code==200
     assert len(calls)==2
+
+
+@pytest.mark.parametrize('status,body,expected', [
+    (400, {'error': {'code': 'invalid_function_parameters', 'param': 'tools[0].private-details'}}, 'tool calling'),
+    (400, {'error': {'param': 'model', 'message': 'private-details'}}, 'model parameter'),
+    (422, {'detail': [{'type': 'value_error', 'loc': ['body', 'messages', 0], 'input': 'private-details'}]}, 'conversation format'),
+    (422, {'detail': [{'type': 'less_than_equal', 'loc': ['body', 'max_tokens'], 'input': 'private-details'}]}, 'output token limit'),
+])
+def test_provider_validation_diagnostics_do_not_remove_tools_or_retry_other_errors(client,monkeypatch,status,body,expected):
+    import json
+    import httpx
+    calls = []
+    def handle(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(status, json=body)
+    mock_ai(monkeypatch, handle, 'https://gateway.test/v1')
+    response = client.post('/api/v1/agent/chat', json={'messages':[{'role':'user','content':'Hi'}]})
+    assert response.status_code == 502
+    assert expected in response.json()['detail']
+    assert 'private-details' not in response.text
+    assert len(calls) == 1 and calls[0]['tools']
 
 
 @pytest.mark.parametrize('body', [{}, {'choices':[]}, {'choices':[{'message':None}]},
