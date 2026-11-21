@@ -117,15 +117,22 @@ test("overview switches daily weekly and monthly step charts using recorded valu
   ).toBe(true);
 });
 
-test("password and authenticator code open the workspace",  async ({
+test("password and authenticator code open the workspace", async ({
   page,
 }) => {
   let loggedIn = false;
+  let attempts = 0;
   await page.route("**/api/v1/**", async (route) => {
     if (route.request().url().endsWith("/auth/login")) {
       expect(route.request().postDataJSON()).toEqual({
         password: "my-private-password-2026",
         totp_code: "012345",
+      });
+      attempts++;
+      if (attempts === 1) return route.fulfill({
+        status: 401,
+        headers: { "X-MainFrame-Time": String(Math.floor(Date.now() / 1000) - 236) },
+        json: { detail: "Invalid password or authenticator code." },
       });
       loggedIn = true;
       return route.fulfill({ json: { ok: true } });
@@ -148,12 +155,21 @@ test("password and authenticator code open the workspace",  async ({
     .fill("my-private-password-2026");
   const signIn = page.getByRole("button", { name: "Sign in", exact: true });
   await expect(signIn).toBeDisabled();
+  await expect(page.locator("#sidebar")).toHaveCount(0);
+  await page.getByLabel("Authenticator code").fill("012 345");
+  await signIn.click();
+  await expect(page.locator(".loginform").getByRole("alert")).toContainText("Your device and server clocks disagree");
+  await expect(page.locator("#sidebar")).toHaveCount(0);
   await page.getByLabel("Authenticator code").fill("012345");
   await signIn.click();
   await expect(
     page.getByRole("button", { name: "New task", exact: true }),
   ).toBeEnabled();
   await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+  loggedIn = false;
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(page.locator("#sidebar")).toHaveCount(0);
 });
 test.beforeEach(({ page }) => {
   page.on("pageerror", (error) =>
@@ -210,7 +226,7 @@ test("create, complete and edit an actual dashboard task", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("offline cache stays readable and writes are disabled", async ({
+test("offline startup hides and removes the old dashboard cache", async ({
   page,
 }) => {
   await page.addInitScript(() =>
@@ -238,13 +254,11 @@ test("offline cache stays readable and writes are disabled", async ({
   await page.route("**/api/v1/**", (r) => r.abort());
   await mockWidgets(page);
   await page.goto("/");
-  await expect(
-    page.getByRole("button", { name: /Offline-Aufgabe/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "New task", exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByText("Last loaded:", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(page.locator(".loginform").getByRole("alert")).toBeVisible();
+  await expect(page.getByText("Offline-Aufgabe")).toHaveCount(0);
+  await expect(page.locator("#sidebar")).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("life-cache"))).toBeNull();
 });
 
 test("missing health values and disconnected services are explicit", async ({

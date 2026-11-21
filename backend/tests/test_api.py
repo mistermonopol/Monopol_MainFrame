@@ -521,7 +521,10 @@ def test_no_password_only_login_or_cross_client_code_replay(client):
             assert payload['password'] not in result.text and 'too-long' not in result.text
             assert 'set-cookie' not in result.headers
     assert client.post(web, json=payload, headers=headers).status_code == 200
-    assert client.post(native, json=payload).status_code == 401
+    replay = client.post(native, json=payload)
+    assert replay.status_code == 401
+    assert replay.json()['detail'] == 'This code was already used. Wait for a new code.'
+    assert abs(int(replay.headers['X-MainFrame-Time']) - time.time()) < 2
     assert client.post(native, json=login_payload(int(time.time()) // 30 + 1)).status_code == 200
 
 

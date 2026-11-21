@@ -5,6 +5,11 @@ object Localizer {
     private val english = mapOf(
         "Übersicht" to "Overview",
         "Authentifizierungscode" to "Authenticator code",
+        "Sitzung wird geprüft …" to "Checking session…",
+        "Sitzung erneut prüfen" to "Check session again",
+        "Die Uhrzeiten von Gerät und Server weichen ab. Aktiviere die automatische Zeitsynchronisierung auf beiden und versuche es erneut." to "Your device and server clocks disagree. Enable automatic time sync on both and try again.",
+        "Dieser Code wurde bereits verwendet. Warte auf einen neuen Code." to "This code was already used. Wait for a new code.",
+        "Der letzte Dashboard-Stand bleibt nur in dieser geöffneten und angemeldeten Registerkarte verfügbar." to "The last dashboard data is only available in this open, signed-in tab.",
         "Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an." to "Sign in with your password and the code from your authenticator app.",
         "Passwort oder Authentifizierungscode ist ungültig." to "Invalid password or authenticator code.",
         "Passwort und sechsstelligen Authentifizierungscode eingeben." to "Enter your password and six-digit authenticator code.",

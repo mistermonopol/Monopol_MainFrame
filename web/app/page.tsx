@@ -137,6 +137,7 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const sessionRevision = useRef(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -211,7 +212,16 @@ export default function Home() {
   const [editor, setEditor] = useState<{ kind: Kind; item?: Item } | null>(
     null,
   );
+  function lockWorkspace() {
+    sessionRevision.current++;
+    setAuth(false);
+    setData(empty);
+    setLoaded("");
+    setEditor(null);
+    setMobileMenuOpen(false);
+  }
   async function request(path: string, init?: RequestInit) {
+    const revision = sessionRevision.current;
     const r = await fetch("/api/v1" + path, {
       ...init,
       headers: {
@@ -221,7 +231,13 @@ export default function Home() {
       },
     });
     if (r.status === 401) {
-      setAuth(false);
+      if (path === "/auth/login") {
+        const serverTime = r.headers.get("X-MainFrame-Time");
+        if (serverTime && Math.abs(Number(serverTime) * 1000 - Date.now()) >= 60_000)
+          throw Error(t("Die Uhrzeiten von Gerät und Server weichen ab. Aktiviere die automatische Zeitsynchronisierung auf beiden und versuche es erneut."));
+      } else if (revision === sessionRevision.current) {
+        lockWorkspace();
+      }
       const body = await r.json().catch(() => ({}));
       throw Error(
         typeof body.detail === "string" ? t(body.detail) : t("Bitte anmelden."),
@@ -238,18 +254,15 @@ export default function Home() {
     return r.json();
   }
   async function load() {
+    const revision = sessionRevision.current;
     setBusy(true);
     try {
       const d = await request("/dashboard");
+      if (revision !== sessionRevision.current) return;
       setData(d);
       setAuth(true);
       setOnline(true);
-      const stamp = new Date().toISOString();
-      setLoaded(stamp);
-      localStorage.setItem(
-        "life-cache",
-        JSON.stringify({ data: d, loaded: stamp }),
-      );
+      setLoaded(new Date().toISOString());
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -260,11 +273,7 @@ export default function Home() {
   }
   useEffect(() => {
     try {
-      const cached = JSON.parse(localStorage.getItem("life-cache") || "null");
-      if (cached) {
-        setData(cached.data);
-        setLoaded(cached.loaded);
-      }
+      localStorage.removeItem("life-cache");
     } catch {}
     void load();
     const on = () => void load();
@@ -325,6 +334,49 @@ export default function Home() {
       </div>
     );
   }
+  if (!auth) return (
+    <main className="sign-in-screen">
+      <form className="card loginform" onSubmit={async (event) => {
+        event.preventDefault();
+        if (signingIn || busy || !/^[0-9]{6}$/.test(totpCode)) return;
+        setError("");
+        setSigningIn(true);
+        try {
+          await request("/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ password, totp_code: totpCode }),
+          });
+          setPassword("");
+          await load();
+        } catch (e) {
+          setError((e as Error).message);
+        } finally {
+          setTotpCode("");
+          setSigningIn(false);
+        }
+      }}>
+        <SquareTerminal size={26} aria-hidden="true" />
+        <h1>Monopol_MainFrame</h1>
+        <p>{t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an.")}</p>
+        {error && <p className="notice" role="alert">{t(error)}</p>}
+        {busy && !signingIn && <p role="status">{t("Sitzung wird geprüft …")}</p>}
+        <label htmlFor="login-password">{t("Passwort")}</label>
+        <input id="login-password" type="password" autoComplete="current-password" required
+          minLength={16} maxLength={1024} value={password} disabled={signingIn}
+          onChange={(event) => setPassword(event.target.value)} />
+        <label htmlFor="login-totp">{t("Authentifizierungscode")}</label>
+        <input id="login-totp" type="text" inputMode="numeric" autoComplete="one-time-code"
+          pattern="[0-9]{6}" required disabled={signingIn} value={totpCode}
+          onChange={(event) => setTotpCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6))} />
+        <button className="primary" disabled={busy || signingIn || totpCode.length !== 6}>
+          {signingIn ? t("Anmelden …") : t("Anmelden")}
+        </button>
+        <button type="button" disabled={busy || signingIn} onClick={() => void load()}>
+          {t("Sitzung erneut prüfen")}
+        </button>
+      </form>
+    </main>
+  );
   return (
     <div
       data-page={page}
@@ -554,63 +606,7 @@ export default function Home() {
               {t(error)}
             </div>
           )}
-          {!auth && (
-            <form
-              className="card loginform"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (signingIn || !/^[0-9]{6}$/.test(totpCode)) return;
-                setSigningIn(true);
-                try {
-                  await request("/auth/login", {
-                    method: "POST",
-                    body: JSON.stringify({ password, totp_code: totpCode }),
-                  });
-                  setPassword("");
-                  await load();
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setTotpCode("");
-                  setSigningIn(false);
-                }
-              }}
-            >
-              <div>
-                <strong>{t("Dein privater Workspace")}</strong>
-                <small>
-                  {t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an.")}
-                </small>
-              </div>
-              <label htmlFor="login-password">{t("Passwort")}</label>
-              <input
-                id="login-password"
-                type="password"
-                autoComplete="current-password"
-                required
-                minLength={16}
-                maxLength={1024}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-              <label htmlFor="login-totp">{t("Authentifizierungscode")}</label>
-              <input
-                id="login-totp"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                required
-                disabled={signingIn}
-                value={totpCode}
-                onChange={(event) => setTotpCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
-              />
-              <button className="primary" disabled={signingIn || totpCode.length !== 6}>
-                {signingIn ? t("Anmelden …") : t("Anmelden")}
-              </button>
-            </form>
-          )}
+
           {loaded && (
             <div className="sync">
               {t("Letzter geladener Stand:")} {dateText(loaded)}
@@ -788,7 +784,7 @@ export default function Home() {
               <h4>{t("Lokaler Cache")}</h4>
               <p>
                 {t(
-                  "Dieser Browser speichert den letzten Dashboard-Stand inklusive Gesundheitswerten für die Offline-Anzeige.",
+                  "Der letzte Dashboard-Stand bleibt nur in dieser geöffneten und angemeldeten Registerkarte verfügbar.",
                 )}
               </p>
               <button
@@ -824,12 +820,14 @@ export default function Home() {
               <button
                 disabled={!enabled}
                 onClick={async () => {
-                  if (await mutate("/auth/logout", "POST")) {
-                    localStorage.removeItem("life-cache");
+                  try {
+                    await request("/auth/logout", { method: "POST" });
+                    lockWorkspace();
+                    setError("");
+                    setPage("dashboard");
                     localStorage.removeItem("mainframe-widgets");
-                    setData(empty);
-                    setLoaded("");
-                    setAuth(false);
+                  } catch (e) {
+                    setError((e as Error).message);
                   }
                 }}
               >

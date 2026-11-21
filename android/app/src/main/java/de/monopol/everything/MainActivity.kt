@@ -47,10 +47,13 @@ class MainActivity : ComponentActivity() {
     private var data by mutableStateOf(JSONObject())
     private var message by mutableStateOf("")
     private var connected by mutableStateOf(false)
+    private var unlocked by mutableStateOf(false)
     private var busy by mutableStateOf(false)
     private var screen by mutableStateOf("Übersicht")
     private var editor by mutableStateOf<Pair<String, JSONObject?>?>(null)
-    private val api get() = Api(store)
+    private val api get() = Api(store) { token ->
+        if (token == store.get("token")) lockWorkspace("Sitzung abgelaufen. Bitte erneut anmelden.")
+    }
     private var language by mutableStateOf("en")
     private var theme by mutableStateOf("dark")
     private var layout by mutableStateOf("index")
@@ -63,9 +66,8 @@ class MainActivity : ComponentActivity() {
         language = store.get("language").takeIf { it=="de" } ?: "en"
         layout = store.get("layout").takeIf { it in listOf("index","studio","control","focus") } ?: "index"
         theme = store.get("theme").takeIf { it in listOf("light","amber","cyan") } ?: "dark"
-        data = runCatching { JSONObject(store.get("cache")) }.getOrDefault(JSONObject())
+        store.remove("cache")
         if(intent?.getBooleanExtra("open_tasks",false)==true)screen="Aufgaben"
-        if(store.get("taskNotifications")=="true")TaskNotifications.schedule(this)
         if (intent?.action?.contains("PERMISSION") == true) screen = "Einstellungen"
         setContent {
             MaterialTheme(colorScheme = if(theme=="light") lightColorScheme(
@@ -90,7 +92,7 @@ class MainActivity : ComponentActivity() {
                 onSurface = Color(0xFFEEE9FB), surfaceVariant = Color(0xFF2A243A),
                 onSurfaceVariant = Color(0xFFBEB0D2), outline = Color(0xFF50425F)
             ), shapes=Shapes(extraSmall=RoundedCornerShape(0.dp),small=RoundedCornerShape(0.dp),medium=RoundedCornerShape(0.dp),large=RoundedCornerShape(0.dp),extraLarge=RoundedCornerShape(0.dp)), typography = programmerTypography) {
-                Surface(Modifier.fillMaxSize()) { App() }
+                Surface(Modifier.fillMaxSize()) { if (unlocked) App() else SignIn() }
             }
         }
         if (store.get("token").isNotEmpty()) refresh(sync = true)
@@ -98,18 +100,36 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); if(intent.getBooleanExtra("open_tasks",false)){screen="Aufgaben";refresh()}; if (intent.action?.contains("PERMISSION") == true) screen = "Einstellungen" }
 
-    private fun login(password: String, totpCode: String, onSuccess: () -> Unit) {
+    private fun lockWorkspace(reason: String = "") {
+        store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig")
+        data = JSONObject()
+        editor = null
+        connected = false
+        unlocked = false
+        message = reason
+    }
+
+    private fun login(server: String, password: String, totpCode: String, onSuccess: () -> Unit) {
         try {
-            val base = Uri.parse(store.get("server"))
-            require(base.scheme == "https" && !base.host.isNullOrEmpty() && base.userInfo == null && base.query == null && (base.path.isNullOrEmpty() || base.path == "/")) { "Bitte die HTTPS-Basisadresse deines Servers eintragen." }
+            val normalized = server.trim().trimEnd('/')
+            val base = Uri.parse(normalized)
+            require(base.scheme == "https" && !base.host.isNullOrEmpty() && base.userInfo == null && base.query == null && base.fragment == null && base.path.isNullOrEmpty()) { "Bitte die HTTPS-Basisadresse deines Servers eintragen." }
             require(password.length >= 16) { "Das Passwort benötigt mindestens 16 Zeichen." }
+            if (normalized != store.get("server")) {
+                lockWorkspace()
+                store.remove("healthGeneration"); store.put("syncEnabled", "false")
+                WorkManager.getInstance(this).cancelUniqueWork("health")
+                store.put("server", normalized)
+            }
+            message = ""
             lifecycleScope.launch {
                 busy = true
                 try {
                     val result = JSONObject(api.call("/auth/native/login", "POST", JSONObject().put("password", password).put("totp_code", totpCode)))
-                    store.put("token", result.getString("access_token"))
+                    val token = result.getString("access_token")
+                    store.put("token", token)
                     onSuccess()
-                    refresh(sync = true)
+                    loadWorkspace(token, sync = true)
                 } catch (e: Exception) { connected = false; message = e.message ?: "Anmeldung fehlgeschlagen" }
                 finally { busy = false }
             }
@@ -117,27 +137,75 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refresh(sync: Boolean = false) {
+        val token = store.get("token")
+        if (token.isEmpty()) return
         lifecycleScope.launch {
             busy = true
-            try {
-                data = JSONObject(api.call("/dashboard"))
-                store.put("cache", data.toString()); store.put("loaded", Instant.now().toString())
-                connected = true; message = ""
-                if(store.get("taskNotifications")=="true")TaskNotifications.schedule(this@MainActivity)
-                if (sync && store.get("syncEnabled") == "true") {
-                    try { HealthSync(this@MainActivity).sync(); data = JSONObject(api.call("/dashboard")); store.put("cache", data.toString()) }
-                    catch (e: Exception) { message = "${t("Gesundheit:")} ${t(e.message ?: "Die Anfrage konnte nicht gespeichert werden.")} ${t("Übertragung wird später erneut versucht.")}" }
-                }
-            } catch (e: Exception) { connected = false; message = e.message ?: "Server nicht erreichbar. Letzter Stand wird angezeigt." }
+            try { loadWorkspace(token, sync) }
+            catch (e: Exception) { connected = false; message = e.message ?: "Server nicht erreichbar. Letzter Stand wird angezeigt." }
             finally { busy = false }
+        }
+    }
+
+    private suspend fun loadWorkspace(token: String, sync: Boolean) {
+        val dashboard = JSONObject(api.call("/dashboard"))
+        if (store.get("token") != token) return
+        data = dashboard
+        store.put("loaded", Instant.now().toString())
+        connected = true; unlocked = true; message = ""
+        if (store.get("taskNotifications") == "true") TaskNotifications.schedule(this)
+        if (sync && store.get("syncEnabled") == "true") {
+            try {
+                HealthSync(this).sync()
+                val updated = JSONObject(api.call("/dashboard"))
+                if (store.get("token") == token) data = updated
+            } catch (e: Exception) {
+                if (unlocked) message = "${t("Gesundheit:")} ${t(e.message ?: "Die Anfrage konnte nicht gespeichert werden.")} ${t("Übertragung wird später erneut versucht.")}"
+            }
         }
     }
 
     private fun mutate(path: String, method: String, body: JSONObject? = null, done: () -> Unit = {}) {
         lifecycleScope.launch {
             busy = true
-            try { api.call(path, method, body); done(); refresh() }
-            catch (e: Exception) { message = e.message ?: "Speichern fehlgeschlagen"; busy = false }
+            try {
+                api.call(path, method, body)
+                done()
+                store.get("token").takeIf { it.isNotEmpty() }?.let { loadWorkspace(it, sync = false) }
+            } catch (e: Exception) { message = e.message ?: "Speichern fehlgeschlagen" }
+            finally { busy = false }
+        }
+    }
+
+    @Composable private fun SignIn() {
+        var server by remember { mutableStateOf(store.get("server").ifBlank { "https://main.monopol-ai.de" }) }
+        var password by remember { mutableStateOf("") }
+        var totpCode by remember { mutableStateOf("") }
+        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding(), contentAlignment = Alignment.Center) {
+            Column(Modifier.widthIn(max = 460.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Monopol_MainFrame", style = MaterialTheme.typography.headlineSmall)
+                Text(t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an."))
+                if (message.isNotBlank()) Text(t(message), color = MaterialTheme.colorScheme.error)
+                OutlinedTextField(server, { server = it }, enabled = !busy, label = { Text(t("Serveradresse (HTTPS)")) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RectangleShape)
+                OutlinedTextField(password, { password = it }, enabled = !busy, label = { Text(t("Passwort")) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RectangleShape,
+                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                OutlinedTextField(totpCode, { totpCode = it.filter { digit -> digit in '0'..'9' }.take(6) }, enabled = !busy,
+                    label = { Text(t("Authentifizierungscode")) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    shape = RectangleShape, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Button(onClick = {
+                    val submitted = totpCode
+                    totpCode = ""
+                    login(server, password, submitted) { password = "" }
+                }, enabled = !busy && password.length >= 16 && totpCode.length == 6,
+                    shape = RectangleShape, modifier = Modifier.fillMaxWidth()) {
+                    Text(t(if (busy) "Sitzung wird geprüft …" else "Anmelden"))
+                }
+                if (store.get("token").isNotEmpty()) OutlinedButton(onClick = { refresh() }, enabled = !busy,
+                    shape = RectangleShape, modifier = Modifier.fillMaxWidth()) { Text(t("Sitzung erneut prüfen")) }
+            }
         }
     }
 
@@ -438,36 +506,18 @@ class MainActivity : ComponentActivity() {
         Text(t("Design"))
         Column(verticalArrangement=Arrangement.spacedBy(8.dp)) { listOf("dark" to "Violet","light" to "Paper","amber" to "Amber","cyan" to "Cyan").forEach { (value,label) -> OutlinedButton(onClick={theme=value;store.put("theme",value)}, colors=ButtonDefaults.outlinedButtonColors(containerColor=if(theme==value) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface), shape = RectangleShape) {Text(t(label))} } }
         Text(t("Einstellungen werden auf diesem Gerät gespeichert."),style=MaterialTheme.typography.bodySmall)
-        var server by remember { mutableStateOf(store.get("server").ifBlank { "https://main.monopol-ai.de" }) }
-        var password by remember { mutableStateOf("") }
-        var totpCode by remember { mutableStateOf("") }
         var confirmDelete by remember { mutableStateOf(false) }
         Text(t("Serververbindung"), style = MaterialTheme.typography.titleMedium)
-        Text(t("Melde dich mit deinem Passwort und dem Code aus deiner Authenticator-App an."))
-        OutlinedTextField(server, { server = it }, label = { Text(t("Serveradresse (HTTPS)")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RectangleShape)
-        OutlinedTextField(password, { password = it }, label = { Text(t("Passwort")) }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), shape = RectangleShape)
-        OutlinedTextField(totpCode, { totpCode = it.filter { digit -> digit in '0'..'9' }.take(6) },
-            label = { Text(t("Authentifizierungscode")) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RectangleShape)
-        Button(onClick = {
-            val normalized = server.trim().trimEnd('/')
-            if (normalized != store.get("server")) {
-                store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); store.remove("healthGeneration")
-                store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
-                data = JSONObject(); connected = false
-            }
-            store.put("server", normalized)
-            val submittedCode = totpCode
-            totpCode = ""
-            login(password, submittedCode) { password = "" }
-        }, enabled = !busy && password.length >= 16 && totpCode.length == 6, shape = RectangleShape) { Text(t("Anmelden")) }
+        Text(store.get("server"))
         Text(t("Datenschutz"), style = MaterialTheme.typography.titleMedium)
-        Text(if(language=="de")"Freigegebene Health-Daten werden als Tageswerte und Messreihen auf deinen Server übertragen. Messreihen bleiben 90 Tage gespeichert. Den Zugriff kannst du in Health Connect widerrufen. Der lokale Cache ist mit Android Keystore verschlüsselt." else "Permitted health data is uploaded as daily summaries and time series. Time series are retained for 90 days. Revoke access in Health Connect at any time. The local cache is encrypted with Android Keystore.")
+        Text(if(language=="de")"Freigegebene Health-Daten werden als Tageswerte und Messreihen auf deinen Server übertragen. Messreihen bleiben 90 Tage gespeichert. Den Zugriff kannst du in Health Connect widerrufen. Die lokale Sitzung ist mit Android Keystore verschlüsselt." else "Permitted health data is uploaded as daily summaries and time series. Time series are retained for 90 days. Revoke access in Health Connect at any time. The local session is encrypted with Android Keystore.")
         OutlinedButton(onClick = { store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); data = JSONObject(); message = "Lokaler Cache gelöscht." }, shape = RectangleShape) { Text(t("Lokalen Cache löschen")) }
         OutlinedButton(onClick = { confirmDelete = true }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Gesundheitsdaten auf Server löschen")) }
         OutlinedButton(onClick = { mutate("/auth/logout", "POST") {
-            store.remove("token"); store.remove("cache"); store.remove("loaded"); store.remove("widgetConfig"); store.put("syncEnabled", "false")
-            WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health"); data = JSONObject(); connected = false
+            lockWorkspace()
+            screen = "Übersicht"
+            store.put("syncEnabled", "false")
+            WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")
         } }, enabled = connected && !busy, shape = RectangleShape) { Text(t("Abmelden")) }
         if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text(t("Gesundheitsdaten löschen?")) }, text = { Text(if(language=="de")"Alle Tageswerte und Messreihen werden auf dem Server gelöscht. Die Synchronisation auf diesem Pixel wird gestoppt." else "All daily summaries and time series will be deleted from the server. Sync on this Pixel will stop.") }, confirmButton = { TextButton(onClick = {
             store.put("syncEnabled", "false"); WorkManager.getInstance(this@MainActivity).cancelUniqueWork("health")

@@ -2,6 +2,7 @@ MESSAGES = {
     "Bitte anmelden": "Please sign in",
     "Ungültiger Ursprung": "Invalid request origin",
     "Passwort oder Authentifizierungscode ist ungültig.": "Invalid password or authenticator code.",
+    "Dieser Code wurde bereits verwendet. Warte auf einen neuen Code.": "This code was already used. Wait for a new code.",
     "Passwort und sechsstelligen Authentifizierungscode eingeben.": "Enter your password and six-digit authenticator code.",
     "Zu viele Anmeldeversuche. Bitte in einer Minute erneut versuchen.": "Too many sign-in attempts. Please try again in one minute.",
     "Eintrag wurde geändert. Bitte neu laden.": "This item has changed. Please reload.",

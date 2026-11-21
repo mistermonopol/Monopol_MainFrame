@@ -110,6 +110,10 @@ class LoginInput(BaseModel):
     totp_code: SecretStr = Field(min_length=6, max_length=6)
 
 
+def rejected_code(detail, timestamp):
+    return HTTPException(401, detail, headers={'X-MainFrame-Time':str(int(timestamp))})
+
+
 def issue_session(payload: LoginInput):
     # One private account, one API process: a shared limit prevents IP spoofing
     # through proxies from bypassing throttling. No passwords are persisted.
@@ -122,14 +126,18 @@ def issue_session(payload: LoginInput):
                                 headers={"Retry-After": "60"})
         candidate = hashlib.scrypt(payload.password.get_secret_value().encode(),
                                    salt=password_salt, n=16384, r=8, p=1)
-        step = verified_step(totp_secret, payload.totp_code.get_secret_value(), time.time())
-        if hmac.compare_digest(candidate, password_key) and step is not None:
-            raw = consume_code_and_create_session(step)
-            if raw is not None:
-                login_failures.clear()
-                return raw
+        timestamp = time.time()
+        if hmac.compare_digest(candidate, password_key):
+            step = verified_step(totp_secret, payload.totp_code.get_secret_value(), timestamp)
+            if step is not None:
+                raw = consume_code_and_create_session(step)
+                if raw is not None:
+                    login_failures.clear()
+                    return raw
+                login_failures.append(clock)
+                raise rejected_code('Dieser Code wurde bereits verwendet. Warte auf einen neuen Code.', timestamp)
         login_failures.append(clock)
-        raise HTTPException(401, 'Passwort oder Authentifizierungscode ist ungültig.')
+        raise rejected_code('Passwort oder Authentifizierungscode ist ungültig.', timestamp)
 
 
 def consume_code_and_create_session(step):

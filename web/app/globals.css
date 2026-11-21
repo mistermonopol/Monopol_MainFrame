@@ -372,22 +372,27 @@ h1 {
   background: var(--panel);
   border-radius: 0;
 }
-.loginform {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-  padding: 22px;
-  margin-bottom: 20px;
+.sign-in-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
 }
-.loginform > div {
-  flex: 1 1 220px;
+.loginform {
+  width: min(100%, 460px);
+  display: grid;
+  gap: 14px;
+  padding: 26px;
+}
+.loginform h1,
+.loginform p {
+  margin: 0;
 }
 .loginform label {
   font-size: 12px;
 }
 .loginform input {
-  flex: 1 1 180px;
+  width: 100%;
   min-width: 0;
 }
 input,
